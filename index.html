@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>English Phrases — Nauka Phrasal Verbs</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<div class="app-container">
+
+  <!-- ====== Nawigacja (ukryta domyślnie) ====== -->
+  <nav class="nav hidden" id="main-nav">
+    <span class="nav-brand">English Phrases</span>
+    <div class="nav-links">
+      <button class="nav-link" data-screen="home">Nauka</button>
+      <button class="nav-link" data-screen="dashboard">Postępy</button>
+      <button class="nav-link" data-screen="settings">Ustawienia</button>
+      <button class="nav-link" data-screen="admin">Admin</button>
+    </div>
+  </nav>
+
+  <!-- ====== Ekran: Logowanie / Rejestracja ====== -->
+  <div class="screen auth-screen active" id="screen-auth">
+    <div class="auth-card">
+      <h1 class="auth-title">English Phrases</h1>
+      <p class="auth-subtitle">Nauka phrasal verbs z inteligentnym systemem powtórek</p>
+
+      <div class="auth-tabs">
+        <button class="auth-tab active" data-tab="login">Zaloguj się</button>
+        <button class="auth-tab" data-tab="register">Zarejestruj się</button>
+      </div>
+
+      <!-- Komunikat błędu / sukcesu -->
+      <div id="auth-message" class="alert hidden"></div>
+
+      <!-- Formularz logowania -->
+      <form id="login-form">
+        <div class="form-group">
+          <label class="form-label" for="login-email">Email</label>
+          <input class="form-input" type="email" id="login-email" placeholder="twoj@email.com" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="login-password">Hasło</label>
+          <input class="form-input" type="password" id="login-password" placeholder="Minimum 6 znaków" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Zaloguj się</button>
+      </form>
+
+      <!-- Formularz rejestracji -->
+      <form id="register-form" class="hidden">
+        <div class="form-group">
+          <label class="form-label" for="register-email">Email</label>
+          <input class="form-input" type="email" id="register-email" placeholder="twoj@email.com" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="register-password">Hasło</label>
+          <input class="form-input" type="password" id="register-password" placeholder="Minimum 6 znaków" required minlength="6">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="register-password-confirm">Powtórz hasło</label>
+          <input class="form-input" type="password" id="register-password-confirm" placeholder="Powtórz hasło" required minlength="6">
+        </div>
+        <button type="submit" class="btn btn-primary">Zarejestruj się</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ====== Ekran: Oczekiwanie na zatwierdzenie ====== -->
+  <div class="screen auth-screen" id="screen-pending">
+    <div class="auth-card">
+      <div class="alert-pending">
+        <h3>Oczekiwanie na zatwierdzenie</h3>
+        <p>Twoje konto zostało utworzone, ale czeka na zatwierdzenie przez administratora.</p>
+        <p class="mt-16 text-muted">Otrzymasz dostęp, gdy administrator zatwierdzi Twoje konto.</p>
+        <button class="btn btn-outline mt-24" id="pending-logout">Wyloguj się</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== Ekran: Strona główna ====== -->
+  <div class="screen" id="screen-home">
+    <div class="home-header">
+      <h1 class="home-greeting" id="home-greeting">Cześć!</h1>
+      <p class="home-date" id="home-date"></p>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value accent" id="stat-today-review">0</div>
+        <div class="stat-label">Do powtórki</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value green" id="stat-today-new">0</div>
+        <div class="stat-label">Nowe dostępne</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value yellow" id="stat-total-known">0</div>
+        <div class="stat-label">Opanowane</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-total-all">0</div>
+        <div class="stat-label">Wszystkie</div>
+      </div>
+    </div>
+
+    <div class="streak-card">
+      <div class="streak-icon">&#128293;</div>
+      <div class="streak-info">
+        <div class="streak-current" id="streak-current">0 dni z rzędu</div>
+        <div class="streak-best" id="streak-best">Rekord: 0 dni</div>
+      </div>
+    </div>
+
+    <button class="start-btn" id="start-learn-btn" disabled>
+      Rozpocznij naukę
+    </button>
+  </div>
+
+  <!-- ====== Ekran: Nauka (fiszki) ====== -->
+  <div class="screen" id="screen-learn">
+    <div class="flashcard-header">
+      <span class="flashcard-counter" id="flashcard-counter">0 / 0</span>
+      <button class="flashcard-close" id="flashcard-close" title="Zakończ sesję">&times;</button>
+    </div>
+
+    <div class="flashcard" id="flashcard">
+      <!-- Treść generowana dynamicznie przez flashcards.js -->
+      <div class="loading-text">
+        <span class="spinner"></span>
+        Ładowanie fiszek...
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== Ekran: Podsumowanie sesji ====== -->
+  <div class="screen" id="screen-summary">
+    <div class="summary-card" id="summary-content">
+      <!-- Treść generowana przez session.js -->
+    </div>
+  </div>
+
+  <!-- ====== Ekran: Dashboard (postępy) ====== -->
+  <div class="screen" id="screen-dashboard">
+    <h2 class="mb-24">Twoje postępy</h2>
+    <div id="dashboard-content">
+      <div class="loading-text">
+        <span class="spinner"></span>
+        Ładowanie statystyk...
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== Ekran: Ustawienia ====== -->
+  <div class="screen" id="screen-settings">
+    <h2 class="mb-24">Ustawienia</h2>
+    <div id="settings-content">
+      <!-- Treść generowana przez settings.js -->
+    </div>
+  </div>
+
+  <!-- ====== Ekran: Panel admina ====== -->
+  <div class="screen" id="screen-admin">
+    <h2 class="mb-24">Panel administratora</h2>
+    <div id="admin-content">
+      <div class="loading-text">
+        <span class="spinner"></span>
+        Ładowanie danych...
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ====== Skrypty ====== -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="js/supabase.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/speech.js"></script>
+<script src="js/sm2.js"></script>
+<script src="js/flashcards.js"></script>
+<script src="js/admin.js"></script>
+<script src="js/dashboard.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>
