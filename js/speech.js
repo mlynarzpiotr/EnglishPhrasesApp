@@ -11,8 +11,8 @@ const Speech = {
 
   /**
    * Inicjalizacja — znajdź najlepszy angielski głos
-   * Przeglądarki ładują głosy asynchronicznie,
-   * dlatego nasłuchujemy zdarzenia voiceschanged.
+   * Przeglądarki ładują głosy asynchronicznie (szczególnie Safari/iOS),
+   * dlatego nasłuchujemy zdarzenia voiceschanged i ponawiamy próby.
    */
   init() {
     if (!this.available) return;
@@ -31,11 +31,21 @@ const Speech = {
         voices.find(v => v.lang === 'en-GB' && v.localService) ||
         voices.find(v => v.lang === 'en-US') ||
         voices.find(v => v.lang.startsWith('en')) ||
-        null;
+        voices[0]; // Fallback: cokolwiek, byle mówiło
     };
 
     findVoice();
-    speechSynthesis.addEventListener('voiceschanged', findVoice);
+
+    // Standardowy nasłuchiwacz
+    if (speechSynthesis.onvoiceschanged !== undefined) {
+      speechSynthesis.onvoiceschanged = findVoice;
+    }
+
+    // Fallback dla Safari/iOS: ponów próbę kilka razy
+    // (czasami onvoiceschanged nie odpala się automatycznie)
+    setTimeout(findVoice, 500);
+    setTimeout(findVoice, 1000);
+    setTimeout(findVoice, 3000);
   },
 
   /**
@@ -45,16 +55,37 @@ const Speech = {
   speak(text) {
     if (!this.available || !text) return;
 
+    // Upewnij się, że mamy głos (może załadował się z opóźnieniem)
+    if (!this.preferredVoice) {
+      const voices = speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        this.preferredVoice = voices.find(v => v.lang.startsWith('en')) || voices[0];
+      }
+    }
+
+    if (!this.preferredVoice) {
+      console.warn('Speech API: Brak dostępnych głosów. Próba użycia domyślnego syntezatora.');
+      // Nie wracamy (return) - próbujemy puścić utterance bez ustawionego voice
+      // Przeglądarka powinna użyć domyślnego systemowego.
+    }
+
     // Zatrzymaj poprzednie odczytywanie
     speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text);
+    // Jeśli nie mamy preferredVoice, nie ustawiamy lang "na sztywno" na en-US, 
+    // chyba że jesteśmy pewni. Ale bezpieczniej ustawić.
     utterance.lang = 'en-US';
     utterance.rate = this.rate;
 
     if (this.preferredVoice) {
       utterance.voice = this.preferredVoice;
     }
+
+    // Obsługa błędów odtwarzania
+    utterance.onerror = (event) => {
+      console.error('Speech API error:', event);
+    };
 
     speechSynthesis.speak(utterance);
   },

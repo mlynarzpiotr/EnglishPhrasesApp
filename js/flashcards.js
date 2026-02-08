@@ -99,11 +99,16 @@ const Flashcards = {
       return;
     }
 
-    // Pobierz pełne dane phrasal verbs (Supabase .in() limit: 300 — mieścimy się)
+    // FIX: Limit to 50 items to avoid Supabase "Request-URI Too Long" error
+    // Jeśli allIds > 50, bierzemy tylko pierwsze 50 (najpilniejsze zaległe + trochę nowych)
+    const BATCH_SIZE = 50;
+    const batchIds = allIds.slice(0, BATCH_SIZE);
+
+    // Pobierz pełne dane phrasal verbs (Supabase .in() limit: 300)
     const { data: verbs, error: verbsErr } = await supabase
       .from('phrasal_verbs')
       .select('*')
-      .in('id', allIds);
+      .in('id', batchIds);
 
     if (verbsErr) throw verbsErr;
 
@@ -417,19 +422,87 @@ const Flashcards = {
   /**
    * Podświetl phrasal verb w zdaniu (pogrubienie)
    */
+  // Słownik czasowników nieregularnych (formy przeszłe)
+  IRREGULAR_VERBS: {
+    'bring': 'brought', 'buy': 'bought', 'catch': 'caught', 'come': 'came',
+    'do': 'did|done', 'drink': 'drank|drunk', 'drive': 'drove|driven',
+    'eat': 'ate|eaten', 'fall': 'fell|fallen', 'feel': 'felt', 'find': 'found',
+    'fly': 'flew|flown', 'get': 'got|gotten', 'give': 'gave|given', 'go': 'went|gone',
+    'have': 'had', 'hear': 'heard', 'hold': 'held', 'keep': 'kept', 'know': 'knew|known',
+    'leave': 'left', 'lose': 'lost', 'make': 'made', 'meet': 'met', 'pay': 'paid',
+    'put': 'put', 'run': 'ran|run', 'say': 'said', 'see': 'saw|seen', 'sell': 'sold',
+    'send': 'sent', 'set': 'set', 'sit': 'sat', 'speak': 'spoke|spoken',
+    'stand': 'stood', 'take': 'took|taken', 'tell': 'told', 'think': 'thought',
+    'write': 'wrote|written', 'break': 'broke|broken', 'wear': 'wore|worn',
+    'throw': 'threw|thrown', 'win': 'won', 'fight': 'fought', 'teach': 'taught',
+    'grow': 'grew|grown', 'cut': 'cut', 'hit': 'hit', 'build': 'built'
+  },
+
+  /**
+   * Podświetl phrasal verb w zdaniu (pogrubienie)
+   * Obsługuje:
+   * 1. Formy regularne (s, ing, ed)
+   * 2. Formy nieregularne (zdefiniowane w IRREGULAR_VERBS)
+   * 3. Rozdzielenie (np. "bring it up") - do 3 słów pomiędzy
+   */
   highlightVerb(sentence, verb) {
+    if (!verb || !sentence) return sentence;
+
     const escaped = this.escapeHtml(sentence);
     const verbParts = verb.toLowerCase().split(' ');
 
-    // Spróbuj znaleźć phrasal verb w różnych formach
-    // np. "bring up" → "brought up", "bringing up", "brings up"
-    // Prosty sposób: podświetl ostatnie słowo (partykułę) i ewentualne formy base verb
-    const particle = verbParts[verbParts.length - 1];
-    const baseVerb = verbParts[0];
+    // Zakładamy typowy phrasal verb: "bring up" (czasownik + partykuła)
+    if (verbParts.length < 2) return escaped;
 
-    // Podświetl dokładne dopasowanie phrasal verb
-    const regex = new RegExp(`\\b(\\w*${baseVerb}\\w*\\s+${particle})\\b`, 'gi');
-    return escaped.replace(regex, '<strong>$1</strong>');
+    const base = verbParts[0];
+    // Obsługa phrasal verbs z więcej niż 1 partykułą np. "catch up with"
+    // Partykuła to wszystko po czasowniku
+    const particle = verbParts.slice(1).join('\\s+');
+
+    // Budowanie wzorca dla części czasownikowej
+    // 1. Base + końcówki: bring, brings, bringing
+    // 2. Nieregularne: brought
+
+    // Zaczynamy od bazy
+    let verbPattern = base;
+
+    // Dodajemy formy nieregularne jeśli istnieją
+    if (this.IRREGULAR_VERBS[base]) {
+      verbPattern += `|${this.IRREGULAR_VERBS[base]}`;
+    }
+
+    // Konstrukcja Regexa:
+    // \b                             -> granica słowa
+    // (                              -> grupa 1: czasownik w różnych formach
+    //   (?:VERB_PATTERN)             -> baza lub nieregularne
+    //   |                            -> LUB
+    //   \w*BASE\w*                   -> słowo zawierające bazę (np. brings, bringing - fallback)
+    // )
+    // \b                             -> granica słowa dla czasownika
+    // (?:                            -> grupa nieschwytująca dla odstępu
+    //   \s+                          -> spacja
+    //   (?:[\w']+\s+){0,3}           -> opcjonalnie 0-3 słów (np. zaimki "it", "him")
+    // )?                             -> cała grupa odstępu jest opcjonalna
+    // PARTICLE                       -> partykuła (np. up)
+
+    // Prostsza wersja regexa, która powinna wystarczyć:
+    // Szukamy słowa, które jest bazą/nieregularnym LUB zawiera bazę (dla suffixów)
+    const verbRegexPart = `(?:${verbPattern}|\\w*${base}\\w*)`;
+
+    // Szukamy partykuły po odstępie (max 3 słowa)
+    const regexStr = `\\b(${verbRegexPart})\\b(?:\\s+(?:[\\w']+\\s+){0,3})?${particle}`;
+
+    try {
+      const regex = new RegExp(`(${regexStr})`, 'gi');
+      // $1 to całe dopasowanie (czasownik + odstęp + partykuła)
+      // Ale uwaga: regex powyżej ma grupę w środku.
+      // Uproszczamy replace: po prostu łapiemy całość
+
+      return escaped.replace(regex, '<strong>$&</strong>');
+    } catch (e) {
+      console.warn('Regex error for verb:', verb, e);
+      return escaped;
+    }
   },
 
   // --- Helpers ---

@@ -2,7 +2,7 @@
 
 ## 🎯 Krytyczne (przed deployem)
 
-- [ ] **Deploy na GitHub Pages**
+- [x] **Deploy na GitHub Pages**
   - Utworzyć repozytorium GitHub
   - Push kodu do `main`
   - Skonfigurować GitHub Pages (Settings → Pages → Source: main branch, root)
@@ -72,18 +72,18 @@
 
 ## 🐛 Bugfixy / Ulepszenia
 
-- [ ] **Limitacja Supabase .in() — max 300**
+- [x] **Limitacja Supabase .in() — max 300**
   - Obecnie: flashcards.js ładuje wszystkie ID przez `.in(allIds)`
   - Jeśli użytkownik ma 300+ zaległych → błąd
-  - Fix: podzielić na batche po 200 lub użyć paginacji
+  - Fix: podzielić na batche po 200 lub użyć paginacji (Zrobione: limit 50 na sesję)
 
-- [ ] **Highlight phrasal verb w zdaniach — lepszy regex**
+- [x] **Highlight phrasal verb w zdaniach — lepszy regex**
   - Obecnie: prosty regex łapie "bring...up" ale nie zawsze dokładnie
-  - Ulepszyć wykrywanie różnych form (brought up, bringing up, brings up)
+  - Ulepszyć wykrywanie różnych form (brought up, bringing up, brings up) (Zrobione)
 
-- [ ] **Edge case: brak głosów w Web Speech API**
+- [x] **Edge case: brak głosów w Web Speech API**
   - Safari na iOS czasami nie ładuje głosów od razu
-  - Dodać fallback lub komunikat "Wymowa niedostępna"
+  - Dodać fallback lub komunikat "Wymowa niedostępna" (Zrobione: retry + fallback do native)
 
 ## 📚 Dokumentacja
 
