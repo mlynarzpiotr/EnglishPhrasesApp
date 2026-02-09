@@ -5,6 +5,7 @@
 const App = {
   screens: {},
   currentScreen: null,
+  _loading: {},  // guard: zapobiega wielokrotnym równoległym ładowaniom ekranów
 
   async init() {
     // Referencje do ekranów
@@ -93,10 +94,14 @@ const App = {
     });
 
     // Załaduj dane ekranu jeśli potrzeba
+    // Każdy loader ma guard (_loading) zapobiegający równoległym wywołaniom
     if (name === 'home') this.loadHomeScreen();
     if (name === 'admin' && Auth.isAdmin()) this.loadAdminScreen();
     if (name === 'dashboard') this.loadDashboardScreen();
     if (name === 'settings') this.loadSettingsScreen();
+
+    // Zatrzymaj wymowę przy zmianie ekranu
+    Speech.stop();
   },
 
   // --- Formularz Auth ---
@@ -196,6 +201,10 @@ const App = {
   async loadHomeScreen() {
     if (!Auth.isApproved()) return;
 
+    // Guard: jeśli już ładujemy home — nie odpalaj ponownie
+    if (this._loading.home) return;
+    this._loading.home = true;
+
     const greeting = document.getElementById('home-greeting');
     const dateEl = document.getElementById('home-date');
     const todayReview = document.getElementById('stat-today-review');
@@ -205,76 +214,75 @@ const App = {
     const streakCurrent = document.getElementById('streak-current');
     const streakBest = document.getElementById('streak-best');
 
-    // Powitanie
+    // Powitanie (synchroniczne — nie wymaga bazy)
     const email = Auth.currentProfile.email;
     const name = email.split('@')[0];
     greeting.textContent = `Cześć, ${name}!`;
 
-    // Data
     const today = new Date();
     const options = { weekday: 'long', day: 'numeric', month: 'long' };
     dateEl.textContent = today.toLocaleDateString('pl-PL', options);
 
-    // Statystyki — ile do powtórki dziś
-    const now = new Date().toISOString();
-    const { count: reviewCount } = await supabase
-      .from('user_progress')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', Auth.currentUser.id)
-      .lte('next_review', now);
+    try {
+      const now = new Date().toISOString();
+      const userId = Auth.currentUser.id;
 
-    // Ile phrasal verbs ma użytkownik w progress
-    const { count: seenCount } = await supabase
-      .from('user_progress')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', Auth.currentUser.id);
+      // Wszystkie zapytania RÓWNOLEGLE (zamiast 5 sekwencyjnych)
+      const [reviewRes, seenRes, allRes, knownRes, streakRes] = await Promise.all([
+        supabase.from('user_progress').select('*', { count: 'exact', head: true })
+          .eq('user_id', userId).lte('next_review', now),
+        supabase.from('user_progress').select('*', { count: 'exact', head: true })
+          .eq('user_id', userId),
+        supabase.from('phrasal_verbs').select('*', { count: 'exact', head: true }),
+        supabase.from('user_progress').select('*', { count: 'exact', head: true })
+          .eq('user_id', userId).gte('repetitions', 3),
+        supabase.from('streaks').select('*').eq('user_id', userId).single()
+      ]);
 
-    // Ile phrasal verbs w bazie
-    const { count: allCount } = await supabase
-      .from('phrasal_verbs')
-      .select('*', { count: 'exact', head: true });
+      // Jeśli użytkownik zmienił ekran w międzyczasie — nie aktualizuj DOM
+      if (this.currentScreen !== 'home') return;
 
-    // Ile "znanych" (repetitions >= 3)
-    const { count: knownCount } = await supabase
-      .from('user_progress')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', Auth.currentUser.id)
-      .gte('repetitions', 3);
+      const reviewCount = reviewRes.count || 0;
+      const seenCount = seenRes.count || 0;
+      const allCount = allRes.count || 0;
+      const knownCount = knownRes.count || 0;
+      const unseenCount = allCount - seenCount;
+      const streakData = streakRes.data;
 
-    // Nowe dostępne (bez limitu — użytkownik decyduje ile przerobić)
-    const unseenCount = (allCount || 0) - (seenCount || 0);
+      todayReview.textContent = reviewCount;
+      todayNew.textContent = unseenCount;
+      totalKnown.textContent = knownCount;
+      totalAll.textContent = allCount;
 
-    todayReview.textContent = reviewCount || 0;
-    todayNew.textContent = unseenCount;
-    totalKnown.textContent = knownCount || 0;
-    totalAll.textContent = allCount || 0;
+      if (streakData) {
+        streakCurrent.textContent = `${streakData.current_streak} dni z rzędu`;
+        streakBest.textContent = `Rekord: ${streakData.longest_streak} dni`;
+      } else {
+        streakCurrent.textContent = '0 dni z rzędu';
+        streakBest.textContent = 'Rekord: 0 dni';
+      }
 
-    // Streak
-    const { data: streakData } = await supabase
-      .from('streaks')
-      .select('*')
-      .eq('user_id', Auth.currentUser.id)
-      .single();
-
-    if (streakData) {
-      streakCurrent.textContent = `${streakData.current_streak} dni z rzędu`;
-      streakBest.textContent = `Rekord: ${streakData.longest_streak} dni`;
-    } else {
-      streakCurrent.textContent = '0 dni z rzędu';
-      streakBest.textContent = 'Rekord: 0 dni';
-    }
-
-    // Aktualizuj przycisk start
-    const totalAvailable = (reviewCount || 0) + unseenCount;
-    const dailyGoal = Auth.currentProfile.daily_goal || 10;
-    const startBtn = document.getElementById('start-learn-btn');
-    if (totalAvailable === 0) {
-      startBtn.textContent = 'Wszystkie fiszki przerobione — wróć jutro!';
-      startBtn.disabled = true;
-    } else {
-      startBtn.textContent = `Rozpocznij naukę (${totalAvailable} dostępnych, cel: ${dailyGoal})`;
+      // Aktualizuj przycisk start
+      const totalAvailable = reviewCount + unseenCount;
+      const dailyGoal = Auth.currentProfile.daily_goal || 10;
+      const startBtn = document.getElementById('start-learn-btn');
+      if (totalAvailable === 0) {
+        startBtn.textContent = 'Wszystkie fiszki przerobione — wróć jutro!';
+        startBtn.disabled = true;
+      } else {
+        startBtn.textContent = `Rozpocznij naukę (${totalAvailable} dostępnych, cel: ${dailyGoal})`;
+        startBtn.disabled = false;
+        startBtn.onclick = () => this.startLearning();
+      }
+    } catch (err) {
+      console.error('Błąd ładowania ekranu głównego:', err);
+      // Nadal pozwól na start — przycisk z domyślnym tekstem
+      const startBtn = document.getElementById('start-learn-btn');
+      startBtn.textContent = 'Rozpocznij naukę';
       startBtn.disabled = false;
       startBtn.onclick = () => this.startLearning();
+    } finally {
+      this._loading.home = false;
     }
   },
 
@@ -290,25 +298,42 @@ const App = {
   // --- Admin Screen ---
   async loadAdminScreen() {
     if (!Auth.isAdmin()) return;
-    // Admin.load() będzie w admin.js
-    if (typeof Admin !== 'undefined') {
-      await Admin.load();
+    if (this._loading.admin) return;
+    this._loading.admin = true;
+    try {
+      if (typeof Admin !== 'undefined') await Admin.load();
+    } catch (err) {
+      console.error('Błąd ładowania panelu admina:', err);
+    } finally {
+      this._loading.admin = false;
     }
   },
 
   // --- Dashboard Screen ---
   async loadDashboardScreen() {
-    // Dashboard.load() będzie w dashboard.js
-    if (typeof Dashboard !== 'undefined') {
-      await Dashboard.load();
+    if (this._loading.dashboard) return;
+    this._loading.dashboard = true;
+    try {
+      if (typeof Dashboard !== 'undefined') await Dashboard.load();
+    } catch (err) {
+      console.error('Błąd ładowania dashboardu:', err);
+      const c = document.getElementById('dashboard-content');
+      if (c) c.innerHTML = '<div class="alert alert-error">Błąd ładowania. Spróbuj ponownie.</div>';
+    } finally {
+      this._loading.dashboard = false;
     }
   },
 
   // --- Settings Screen ---
   async loadSettingsScreen() {
-    // Settings.load() będzie w settings.js
-    if (typeof Settings !== 'undefined') {
-      await Settings.load();
+    if (this._loading.settings) return;
+    this._loading.settings = true;
+    try {
+      if (typeof Settings !== 'undefined') await Settings.load();
+    } catch (err) {
+      console.error('Błąd ładowania ustawień:', err);
+    } finally {
+      this._loading.settings = false;
     }
   }
 };
