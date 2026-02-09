@@ -207,10 +207,10 @@ const App = {
 
     const greeting = document.getElementById('home-greeting');
     const dateEl = document.getElementById('home-date');
-    const todayReview = document.getElementById('stat-today-review');
-    const todayNew = document.getElementById('stat-today-new');
-    const totalKnown = document.getElementById('stat-total-known');
-    const totalAll = document.getElementById('stat-total-all');
+    const statAll = document.getElementById('stat-total-all');
+    const statToLearn = document.getElementById('stat-to-learn');
+    const statLearning = document.getElementById('stat-learning');
+    const statKnown = document.getElementById('stat-known');
     const streakCurrent = document.getElementById('streak-current');
     const streakBest = document.getElementById('streak-best');
 
@@ -246,13 +246,14 @@ const App = {
       const seenCount = seenRes.count || 0;
       const allCount = allRes.count || 0;
       const knownCount = knownRes.count || 0;
-      const unseenCount = allCount - seenCount;
+      const toLearnCount = allCount - seenCount;
+      const learningCount = seenCount - knownCount;
       const streakData = streakRes.data;
 
-      todayReview.textContent = reviewCount;
-      todayNew.textContent = unseenCount;
-      totalKnown.textContent = knownCount;
-      totalAll.textContent = allCount;
+      statAll.textContent = allCount;
+      statToLearn.textContent = toLearnCount;
+      statLearning.textContent = learningCount;
+      statKnown.textContent = knownCount;
 
       if (streakData) {
         streakCurrent.textContent = `${streakData.current_streak} dni z rzędu`;
@@ -263,7 +264,7 @@ const App = {
       }
 
       // Aktualizuj przycisk start
-      const totalAvailable = reviewCount + unseenCount;
+      const totalAvailable = reviewCount + toLearnCount;
       const dailyGoal = Auth.currentProfile.daily_goal || 10;
       const startBtn = document.getElementById('start-learn-btn');
       if (totalAvailable === 0) {
