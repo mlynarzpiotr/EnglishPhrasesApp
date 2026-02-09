@@ -271,7 +271,7 @@ const App = {
         startBtn.textContent = 'Wszystkie fiszki przerobione — wróć jutro!';
         startBtn.disabled = true;
       } else {
-        startBtn.textContent = `Rozpocznij naukę (${totalAvailable} dostępnych, cel: ${dailyGoal})`;
+        startBtn.textContent = `Rozpocznij naukę (cel: ${dailyGoal})`;
         startBtn.disabled = false;
         startBtn.onclick = () => this.startLearning();
       }
