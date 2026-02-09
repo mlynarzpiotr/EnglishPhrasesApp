@@ -9,6 +9,8 @@ const Flashcards = {
   currentIndex: 0,    // aktualny indeks w kolejce
   sessionResults: [], // wyniki sesji: { verb, known }
   sessionStart: null, // czas rozpoczęcia sesji
+  _saveQueue: [],     // kolejka zapisów SM2 (sekwencyjna, nie równoległa)
+  _saving: false,     // czy aktualnie trwa zapis do bazy
 
   /**
    * Rozpocznij sesję nauki
@@ -163,10 +165,8 @@ const Flashcards = {
       known: known
     });
 
-    // Zapisz do bazy przez SM-2 (w tle)
-    SM2.saveAnswer(Auth.currentUser.id, verb.id, known).catch(err => {
-      console.error('Błąd zapisu SM2:', err);
-    });
+    // Dodaj do kolejki zapisów (sekwencyjnie, nie równolegle)
+    this.enqueueSave(Auth.currentUser.id, verb.id, known);
 
     // Pokaż odpowiedź
     this.showAnswer(verb, known);
@@ -281,9 +281,51 @@ const Flashcards = {
   },
 
   /**
+   * Kolejkuj zapis SM2 — wykonuje zapisy jeden po drugim,
+   * zamiast bombardować bazę wieloma równoległymi requestami.
+   */
+  enqueueSave(userId, verbId, known) {
+    this._saveQueue.push({ userId, verbId, known });
+    this._processSaveQueue();
+  },
+
+  async _processSaveQueue() {
+    if (this._saving || this._saveQueue.length === 0) return;
+    this._saving = true;
+
+    while (this._saveQueue.length > 0) {
+      const { userId, verbId, known } = this._saveQueue.shift();
+      try {
+        await SM2.saveAnswer(userId, verbId, known);
+      } catch (err) {
+        console.error('Błąd zapisu SM2:', err);
+      }
+    }
+
+    this._saving = false;
+  },
+
+  /**
+   * Poczekaj aż wszystkie zapisy SM2 się zakończą
+   * (wywoływane przed endSession, żeby dane były kompletne)
+   */
+  async _waitForSaves() {
+    // Jeśli kolejka jest pusta i nic nie zapisuje — wróć od razu
+    if (this._saveQueue.length === 0 && !this._saving) return;
+
+    // Czekaj max 10 sekund
+    const deadline = Date.now() + 10000;
+    while ((this._saveQueue.length > 0 || this._saving) && Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 100));
+    }
+  },
+
+  /**
    * Zakończ sesję — zapisz log i pokaż podsumowanie
    */
   async endSession() {
+    // Poczekaj na zakończenie zapisów SM2 w tle
+    await this._waitForSaves();
     const duration = Math.round((new Date() - this.sessionStart) / 1000);
     const totalReviewed = this.sessionResults.length;
     const totalKnown = this.sessionResults.filter(r => r.known).length;
