@@ -495,7 +495,7 @@ a:hover {
   background: var(--bg-secondary);
   border: 1px solid var(--accent);
   color: var(--accent);
-  margin-top: 12px;
+  margin-top: 16px;
 }
 
 .start-btn-secondary:hover:not(:disabled) {
