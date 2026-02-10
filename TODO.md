@@ -21,12 +21,6 @@
   - Android Chrome
   - Sprawdzić responsive design (fiszki, nawigacja, podsumowanie)
 
-- [ ] **Filtrowanie w ustawieniach**
-  - Checkboxy: kategorie (business, general, both)
-  - Checkboxy: tagi (meetings, emails, negotiations, presentations, finance, hr, daily, travel)
-  - Checkboxy: poziomy (B2, C1)
-  - Zapis preferencji do `profiles` (nowa kolumna JSONB `filter_preferences`)
-  - Flashcards.js: uwzględnić filtry w `loadQueue()`
 
 ## 📝 Nice to have (przyszłość)
 
@@ -73,17 +67,22 @@
 ## 🐛 Bugfixy / Ulepszenia
 
 - [x] **Limitacja Supabase .in() — max 300**
-  - Obecnie: flashcards.js ładuje wszystkie ID przez `.in(allIds)`
-  - Jeśli użytkownik ma 300+ zaległych → błąd
   - Fix: podzielić na batche po 200 lub użyć paginacji (Zrobione: limit 50 na sesję)
 
 - [x] **Highlight phrasal verb w zdaniach — lepszy regex**
-  - Obecnie: prosty regex łapie "bring...up" ale nie zawsze dokładnie
   - Ulepszyć wykrywanie różnych form (brought up, bringing up, brings up) (Zrobione)
 
 - [x] **Edge case: brak głosów w Web Speech API**
-  - Safari na iOS czasami nie ładuje głosów od razu
   - Dodać fallback lub komunikat "Wymowa niedostępna" (Zrobione: retry + fallback do native)
+
+- [x] **Zawieszanie się aplikacji po sesji nauki**
+  - loadHomeScreen: 5 sekwencyjnych zapytań → Promise.all
+  - Guard _loading zapobiegający wielokrotnym wywołaniom
+  - SM2: fire-and-forget → kolejka sekwencyjna
+  - Speech.stop() przy zmianie ekranu
+
+- [x] **Liczniki na panelu głównym nie sumowały się do Wszystkie**
+  - Nowe 4 kafelki: Wszystkie / Do nauki / W trakcie nauki / Opanowane
 
 ## 📚 Dokumentacja
 
