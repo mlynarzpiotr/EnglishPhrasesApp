@@ -86,6 +86,36 @@
       <p class="home-date" id="home-date"></p>
     </div>
 
+    <div class="method-card" id="method-card">
+      <button class="method-toggle" id="method-toggle">
+        <span class="method-toggle-icon">&#9656;</span>
+        <span class="method-toggle-title">Jak działa nauka?</span>
+      </button>
+      <div class="method-content hidden" id="method-content">
+        <div class="method-step">
+          <div class="method-step-icon">📦</div>
+          <div class="method-step-text">
+            <strong>System pudełek</strong>
+            <p>Każdy phrasal verb zaczyna w "Pudełku 1" (powtórka jutro). Gdy odpowiesz "wiem" — przechodzi dalej (za 6 dni, 2 tygodnie, miesiąc...). Gdy "nie wiem" — wraca do Pudełka 1.</p>
+          </div>
+        </div>
+        <div class="method-step">
+          <div class="method-step-icon">📈</div>
+          <div class="method-step-text">
+            <strong>Dopasowanie do Ciebie</strong>
+            <p>Algorytm śledzi, które phrasal verbs sprawiają Ci trudność. Te trudniejsze zobaczysz częściej, a łatwe — coraz rzadziej.</p>
+          </div>
+        </div>
+        <div class="method-step">
+          <div class="method-step-icon">🎯</div>
+          <div class="method-step-text">
+            <strong>Optymalny moment</strong>
+            <p>Powtórka pojawia się tuż przed tym, jak zapomnisz — nie za wcześnie (strata czasu) i nie za późno (już zapomniałeś). To metoda SM-2 z badań nad pamięcią.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-value" id="stat-total-all">0</div>
@@ -116,6 +146,9 @@
     <button class="start-btn" id="start-learn-btn" disabled>
       Rozpocznij naukę
     </button>
+    <button class="start-btn start-btn-secondary" id="start-quiz-btn" disabled>
+      Tryb quiz
+    </button>
   </div>
 
   <!-- ====== Ekran: Nauka (fiszki) ====== -->
@@ -130,6 +163,20 @@
       <div class="loading-text">
         <span class="spinner"></span>
         Ładowanie fiszek...
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== Ekran: Quiz ====== -->
+  <div class="screen" id="screen-quiz">
+    <div class="flashcard-header">
+      <span class="flashcard-counter" id="quiz-counter">0 / 0</span>
+      <button class="flashcard-close" id="quiz-close" title="Zakończ sesję">&times;</button>
+    </div>
+    <div class="flashcard" id="quiz-content">
+      <div class="loading-text">
+        <span class="spinner"></span>
+        Ładowanie quizu...
       </div>
     </div>
   </div>
@@ -180,6 +227,7 @@
 <script src="js/speech.js"></script>
 <script src="js/sm2.js"></script>
 <script src="js/flashcards.js"></script>
+<script src="js/quiz.js"></script>
 <script src="js/admin.js"></script>
 <script src="js/dashboard.js"></script>
 <script src="js/settings.js"></script>

@@ -14,6 +14,7 @@ const App = {
       pending: document.getElementById('screen-pending'),
       home: document.getElementById('screen-home'),
       learn: document.getElementById('screen-learn'),
+      quiz: document.getElementById('screen-quiz'),
       summary: document.getElementById('screen-summary'),
       dashboard: document.getElementById('screen-dashboard'),
       settings: document.getElementById('screen-settings'),
@@ -33,6 +34,17 @@ const App = {
 
     // Inicjalizacja formularza auth
     this.initAuthForm();
+
+    // Toggle "Jak działa nauka?"
+    const methodToggle = document.getElementById('method-toggle');
+    const methodContent = document.getElementById('method-content');
+    const methodCard = document.getElementById('method-card');
+    if (methodToggle) {
+      methodToggle.addEventListener('click', () => {
+        methodContent.classList.toggle('hidden');
+        methodCard.classList.toggle('open');
+      });
+    }
 
     // Sprawdź sesję
     const isLoggedIn = await Auth.init();
@@ -267,13 +279,17 @@ const App = {
       const totalAvailable = reviewCount + toLearnCount;
       const dailyGoal = Auth.currentProfile.daily_goal || 10;
       const startBtn = document.getElementById('start-learn-btn');
+      const quizBtn = document.getElementById('start-quiz-btn');
       if (totalAvailable === 0) {
         startBtn.textContent = 'Wszystkie fiszki przerobione — wróć jutro!';
         startBtn.disabled = true;
+        quizBtn.disabled = true;
       } else {
         startBtn.textContent = `Rozpocznij naukę (cel: ${dailyGoal})`;
         startBtn.disabled = false;
         startBtn.onclick = () => this.startLearning();
+        quizBtn.disabled = false;
+        quizBtn.onclick = () => this.startQuiz();
       }
     } catch (err) {
       console.error('Błąd ładowania ekranu głównego:', err);
@@ -282,6 +298,9 @@ const App = {
       startBtn.textContent = 'Rozpocznij naukę';
       startBtn.disabled = false;
       startBtn.onclick = () => this.startLearning();
+      const quizBtn = document.getElementById('start-quiz-btn');
+      quizBtn.disabled = false;
+      quizBtn.onclick = () => this.startQuiz();
     } finally {
       this._loading.home = false;
     }
@@ -293,6 +312,14 @@ const App = {
     // Flashcards.start() będzie w flashcards.js
     if (typeof Flashcards !== 'undefined') {
       await Flashcards.start();
+    }
+  },
+
+  // --- Start quizu ---
+  async startQuiz() {
+    this.showScreen('quiz');
+    if (typeof Quiz !== 'undefined') {
+      await Quiz.start();
     }
   },
 
