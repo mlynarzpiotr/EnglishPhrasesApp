@@ -84,6 +84,20 @@
 - [x] **Liczniki na panelu głównym nie sumowały się do Wszystkie**
   - Nowe 4 kafelki: Wszystkie / Do nauki / W trakcie nauki / Opanowane
 
+- [x] **Poprawa jakości phrasal verbs ID 200-275**
+  - Szczegółowe definicje (1-2 zdania z niuansami)
+  - Wielowariantowe tłumaczenia PL z kontekstem
+  - 4 przykłady na wpis z różnorodnymi czasami
+  - Konteksty 6-15 słów, szczegółowe grammar_note
+  - Utworzono `sql/004_update_phrasal_verbs_200_275.sql` do aktualizacji Supabase
+  - Utworzono `update_supabase.html` jako alternatywny sposób aktualizacji
+
+- [x] **Sekcja "Jak działa nauka?" na ekranie głównym**
+  - Zwijany panel wyjaśniający algorytm SM-2
+  - 3 kroki: System pudełek, Dopasowanie do Ciebie, Optymalny moment
+  - Domyślnie zwinięty, rozwija się po kliknięciu
+  - Umieszczony na górze ekranu home (przed statystykami)
+
 ## 📚 Dokumentacja
 
 - [x] `INSTRUKCJE.md` — pełna specyfikacja

@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Update Supabase - Phrasal Verbs 200-275</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #1a1a1a;
+      color: #e0e0e0;
+    }
+    .container {
+      background: #2d2d2d;
+      border-radius: 8px;
+      padding: 30px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
+    h1 {
+      color: #4a9eff;
+      margin-bottom: 20px;
+    }
+    .info {
+      background: #3a3a3a;
+      padding: 15px;
+      border-radius: 5px;
+      margin: 20px 0;
+      border-left: 4px solid #4a9eff;
+    }
+    button {
+      background: #4a9eff;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 5px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    button:hover {
+      background: #3a8eef;
+      transform: translateY(-1px);
+    }
+    button:disabled {
+      background: #555;
+      cursor: not-allowed;
+      transform: none;
+    }
+    #progress {
+      margin-top: 20px;
+      padding: 15px;
+      background: #3a3a3a;
+      border-radius: 5px;
+      display: none;
+    }
+    .progress-bar {
+      width: 100%;
+      height: 30px;
+      background: #2d2d2d;
+      border-radius: 15px;
+      overflow: hidden;
+      margin: 10px 0;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #4a9eff, #2d7ecf);
+      transition: width 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+    }
+    .log {
+      margin-top: 10px;
+      max-height: 300px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 12px;
+      background: #1a1a1a;
+      padding: 10px;
+      border-radius: 5px;
+    }
+    .success { color: #4ade80; }
+    .error { color: #f87171; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Update Supabase - Phrasal Verbs 200-275</h1>
+
+    <div class="info">
+      <strong>ℹ️ Informacja:</strong><br>
+      Ten skrypt zaktualizuje 76 wpisów (ID 200-275) w tabeli <code>phrasal_verbs</code> w Supabase.<br>
+      Używa danych z pliku <code>data/phrasal-verbs_200-275_improved.json</code>
+    </div>
+
+    <button id="startBtn" onclick="startUpdate()">Rozpocznij aktualizację</button>
+
+    <div id="progress">
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill" style="width: 0%">0%</div>
+      </div>
+      <div id="log" class="log"></div>
+    </div>
+  </div>
+
+  <script src="js/supabase.js"></script>
+  <script>
+    let improvedData = null;
+
+    // Load JSON data
+    fetch('data/phrasal-verbs_200-275_improved.json')
+      .then(r => r.json())
+      .then(data => {
+        improvedData = data;
+        console.log('✓ Loaded improved data:', data.length, 'entries');
+      })
+      .catch(err => {
+        console.error('Error loading JSON:', err);
+        alert('Błąd ładowania pliku JSON: ' + err.message);
+      });
+
+    async function startUpdate() {
+      if (!improvedData) {
+        alert('Dane nie zostały jeszcze załadowane. Spróbuj ponownie.');
+        return;
+      }
+
+      const btn = document.getElementById('startBtn');
+      const progress = document.getElementById('progress');
+      const progressFill = document.getElementById('progressFill');
+      const log = document.getElementById('log');
+
+      btn.disabled = true;
+      progress.style.display = 'block';
+      log.innerHTML = '';
+
+      const total = improvedData.length;
+      let updated = 0;
+      let errors = 0;
+
+      logMessage(`Rozpoczynam aktualizację ${total} wpisów...`, 'info');
+
+      for (let i = 0; i < improvedData.length; i++) {
+        const entry = improvedData[i];
+
+        try {
+          const { error } = await supabase
+            .from('phrasal_verbs')
+            .update({
+              verb: entry.verb,
+              definition_en: entry.definition_en,
+              translation_pl: entry.translation_pl,
+              category: entry.category,
+              tags: entry.tags,
+              register: entry.register,
+              difficulty: entry.difficulty,
+              examples: entry.examples
+            })
+            .eq('id', entry.id);
+
+          if (error) throw error;
+
+          updated++;
+          logMessage(`✓ ID ${entry.id}: ${entry.verb}`, 'success');
+        } catch (error) {
+          errors++;
+          logMessage(`✗ ID ${entry.id}: ${error.message}`, 'error');
+        }
+
+        // Update progress bar
+        const percent = Math.round(((i + 1) / total) * 100);
+        progressFill.style.width = percent + '%';
+        progressFill.textContent = percent + '%';
+
+        // Small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      // Final summary
+      logMessage('', 'info');
+      logMessage('═══════════════════════════════════', 'info');
+      logMessage(`Zakończono! Zaktualizowano: ${updated}/${total}`, 'success');
+      if (errors > 0) {
+        logMessage(`Błędy: ${errors}`, 'error');
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Aktualizacja zakończona ✓';
+    }
+
+    function logMessage(msg, type = 'info') {
+      const log = document.getElementById('log');
+      const line = document.createElement('div');
+      line.className = type;
+      line.textContent = msg;
+      log.appendChild(line);
+      log.scrollTop = log.scrollHeight;
+    }
+  </script>
+</body>
+</html>
