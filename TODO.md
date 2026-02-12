@@ -69,6 +69,9 @@
 
 ## 🐛 Bugfixy / Ulepszenia
 
+- [x] **Dynamiczny tekst przycisku start (Home)**
+  - Nowe / Powtórki / Dodatkowe nowe
+
 - [x] **Limitacja Supabase .in() — max 300**
   - Fix: podzielić na batche po 200 lub użyć paginacji (Zrobione: limit 50 na sesję)
 

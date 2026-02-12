@@ -238,9 +238,10 @@ const App = {
     try {
       const now = new Date().toISOString();
       const userId = Auth.currentUser.id;
+      const dailyKey = this.getLocalDateKey();
 
       // Wszystkie zapytania RÓWNOLEGLE (zamiast 5 sekwencyjnych)
-      const [reviewRes, seenRes, allRes, knownRes, streakRes] = await Promise.all([
+      const [reviewRes, seenRes, allRes, knownRes, streakRes, dailyNewRes] = await Promise.all([
         supabase.from('user_progress').select('*', { count: 'exact', head: true })
           .eq('user_id', userId).lte('next_review', now),
         supabase.from('user_progress').select('*', { count: 'exact', head: true })
@@ -248,7 +249,9 @@ const App = {
         supabase.from('phrasal_verbs').select('*', { count: 'exact', head: true }),
         supabase.from('user_progress').select('*', { count: 'exact', head: true })
           .eq('user_id', userId).gte('repetitions', 3),
-        supabase.from('streaks').select('*').eq('user_id', userId).single()
+        supabase.from('streaks').select('*').eq('user_id', userId).single(),
+        supabase.from('user_progress').select('*', { count: 'exact', head: true })
+          .eq('user_id', userId).eq('first_seen_on', dailyKey)
       ]);
 
       // Jeśli użytkownik zmienił ekran w międzyczasie — nie aktualizuj DOM
@@ -278,14 +281,34 @@ const App = {
       // Aktualizuj przycisk start
       const totalAvailable = reviewCount + toLearnCount;
       const dailyGoal = Auth.currentProfile.daily_goal || 10;
+      const dailyNewDone = dailyNewRes.count || 0;
+      const rawDailyRemaining = Math.max(0, dailyGoal - dailyNewDone);
+      const dailyNewRemaining = Math.min(rawDailyRemaining, toLearnCount);
+      const extraNewCount = Math.max(0, toLearnCount - dailyNewRemaining);
       const startBtn = document.getElementById('start-learn-btn');
       const quizBtn = document.getElementById('start-quiz-btn');
       if (totalAvailable === 0) {
         startBtn.textContent = 'Wszystkie fiszki przerobione — wróć jutro!';
         startBtn.disabled = true;
+        quizBtn.textContent = 'Tryb quiz';
         quizBtn.disabled = true;
       } else {
-        startBtn.textContent = `Rozpocznij naukę (cel: ${dailyGoal})`;
+        if (dailyNewRemaining > 0) {
+          startBtn.textContent = `Rozpocznij naukę (nowe: ${dailyNewRemaining})`;
+          quizBtn.textContent = `Rozpocznij quiz (nowe: ${dailyNewRemaining})`;
+        } else if (reviewCount > 0) {
+          startBtn.textContent = `Rozpocznij powtórki (pozostało: ${reviewCount})`;
+          quizBtn.textContent = `Rozpocznij quiz (powtórki: ${reviewCount})`;
+        } else if (extraNewCount > 0) {
+          startBtn.textContent = `Kontynuuj naukę (dodatkowe: ${extraNewCount})`;
+          quizBtn.textContent = `Kontynuuj quiz (dodatkowe: ${extraNewCount})`;
+        } else {
+          startBtn.textContent = 'Wszystkie fiszki przerobione — wróć jutro!';
+          quizBtn.textContent = 'Wszystkie fiszki przerobione — wróć jutro!';
+          startBtn.disabled = true;
+          quizBtn.disabled = true;
+          return;
+        }
         startBtn.disabled = false;
         startBtn.onclick = () => this.startLearning();
         quizBtn.disabled = false;
@@ -300,6 +323,7 @@ const App = {
       startBtn.onclick = () => this.startLearning();
       const quizBtn = document.getElementById('start-quiz-btn');
       quizBtn.disabled = false;
+      quizBtn.textContent = 'Tryb quiz';
       quizBtn.onclick = () => this.startQuiz();
     } finally {
       this._loading.home = false;
@@ -364,6 +388,14 @@ const App = {
       this._loading.settings = false;
     }
   }
+};
+
+// Pomocnicza funkcja daty lokalnej (YYYY-MM-DD)
+App.getLocalDateKey = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 // Start aplikacji po załadowaniu strony

@@ -92,6 +92,9 @@ Sesja ma trzy etapy:
 **Ważne:** nowe fiszki są losowane stabilnie na dany dzień, więc przy kolejnym logowaniu
 zobaczysz te same „pozostałe” nowe, a nie inne.
 
+Na ekranie startowym przycisk nauki pokazuje aktualny etap dnia:
+**Nowe**, **Powtórki** albo **Dodatkowe nowe**.
+
 ---
 
 ## Dlaczego to działa?

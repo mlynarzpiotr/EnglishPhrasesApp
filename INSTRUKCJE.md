@@ -227,7 +227,10 @@ Sesja jest podzielona na etapy:
 - Powitanie: "Cześć, [imię]"
 - Statystyki dnia: ile do przerobienia dziś (zaległe + nowe)
 - Seria dni (streak): aktualna i najdłuższa
-- Przycisk: "Rozpocznij naukę"
+- Przycisk: dynamiczny opis zależny od etapu dnia:
+  - **Nowe** → "Rozpocznij naukę (nowe: X)"
+  - **Powtórki** → "Rozpocznij powtórki (pozostało: Y)"
+  - **Dodatkowe nowe** → "Kontynuuj naukę (dodatkowe: Z)"
 - Nawigacja: Nauka | Dashboard | Ustawienia | (Admin — tylko dla admina)
 
 ### 6.3 Ekran nauki (fiszki)
