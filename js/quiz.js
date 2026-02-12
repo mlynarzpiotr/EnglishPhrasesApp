@@ -7,13 +7,21 @@
 const Quiz = {
   queue: [],           // fiszki do quizu
   allVerbs: [],        // WSZYSTKIE phrasal verbs (do generowania fałszywych opcji)
+  verbMap: {},
   currentIndex: 0,
   sessionResults: [],
   sessionStart: null,
   _saveQueue: [],
   _saving: false,
-  dailyGoal: 10,
+  dailyKey: null,
+  dailyNewTarget: 0,
+  dailyNewDone: 0,
+  remainingPhaseCIds: [],
+  phaseAEnd: 0,
+  phaseBEnd: 0,
   goalReached: false,
+  inPhaseC: false,
+  _loadingMore: false,
   _answered: false,    // blokada podwójnego kliknięcia
 
   /**
@@ -22,10 +30,14 @@ const Quiz = {
   async start() {
     this.queue = [];
     this.allVerbs = [];
+    this.verbMap = {};
     this.currentIndex = 0;
     this.sessionResults = [];
     this.sessionStart = new Date();
     this._answered = false;
+    this.goalReached = false;
+    this.inPhaseC = false;
+    this._loadingMore = false;
 
     const content = document.getElementById('quiz-content');
     content.innerHTML = '<div class="loading-text"><span class="spinner"></span> Ładowanie quizu...</div>';
@@ -33,13 +45,19 @@ const Quiz = {
     try {
       await this.loadQueue();
 
-      if (this.queue.length === 0) {
+      if (this.queue.length === 0 && this.remainingPhaseCIds.length === 0) {
         content.innerHTML = `
           <div class="text-center" style="padding: 48px 24px;">
             <p style="font-size: 1.2rem; margin-bottom: 16px;">Brak fiszek na dziś!</p>
             <p class="text-muted">Wróć jutro na kolejne powtórki.</p>
             <button class="btn btn-outline mt-24" onclick="App.showScreen('home')">Wróć do ekranu głównego</button>
           </div>`;
+        return;
+      }
+
+      if (this.phaseBEnd === 0 && this.remainingPhaseCIds.length > 0) {
+        this.goalReached = true;
+        this.showGoalReached();
         return;
       }
 
@@ -66,8 +84,11 @@ const Quiz = {
   async loadQueue() {
     const userId = Auth.currentUser.id;
     const now = new Date().toISOString();
-    this.dailyGoal = Auth.currentProfile.daily_goal || 10;
+    this.dailyKey = this.getLocalDateKey();
+    this.dailyNewTarget = Auth.currentProfile.daily_goal || 10;
     this.goalReached = false;
+    this.inPhaseC = false;
+    this.remainingPhaseCIds = [];
 
     // 1. Zaległe — phrasal verbs z next_review <= teraz
     const { data: overdue, error: overdueErr } = await supabase
@@ -99,28 +120,42 @@ const Quiz = {
 
     this.allVerbs = allVerbsData || [];
 
-    const newVerbIds = this.allVerbs
+    const unseenIds = this.allVerbs
       .map(v => v.id)
       .filter(id => !seenIds.includes(id));
 
-    // 4. Połącz kolejkę: zaległe najpierw, potem nowe
-    const allIds = [...overdueVerbIds, ...newVerbIds];
+    // 4. Liczba nowych zrobionych dziś
+    const { count: dailyNewDone, error: dailyNewErr } = await supabase
+      .from('user_progress')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('first_seen_on', this.dailyKey);
 
-    if (allIds.length === 0) {
-      this.queue = [];
-      return;
-    }
+    if (dailyNewErr) throw dailyNewErr;
 
-    // Limit do 50 (jak w flashcards)
-    const BATCH_SIZE = 50;
-    const batchIds = allIds.slice(0, BATCH_SIZE);
+    this.dailyNewDone = dailyNewDone || 0;
+    const dailyNewRemaining = Math.max(0, this.dailyNewTarget - this.dailyNewDone);
 
-    // Buduj kolejkę z pełnych danych (mamy już allVerbs)
-    const verbMap = {};
-    this.allVerbs.forEach(v => { verbMap[v.id] = v; });
+    // 5. Dzienna losowość (stabilna w ciągu dnia)
+    const sortedNewIds = this.sortDailyNewIds(unseenIds, userId, this.dailyKey);
 
-    this.queue = batchIds
-      .map(id => verbMap[id])
+    // Etap A: dzienny pakiet nowych
+    const phaseAIds = sortedNewIds.slice(0, dailyNewRemaining);
+
+    // Etap C: pozostałe nowe
+    this.remainingPhaseCIds = sortedNewIds.slice(dailyNewRemaining);
+
+    // Etap B: zaległe powtórki
+    const initialIds = [...phaseAIds, ...overdueVerbIds];
+
+    this.phaseAEnd = phaseAIds.length;
+    this.phaseBEnd = phaseAIds.length + overdueVerbIds.length;
+
+    this.verbMap = {};
+    this.allVerbs.forEach(v => { this.verbMap[v.id] = v; });
+
+    this.queue = initialIds
+      .map(id => this.verbMap[id])
       .filter(v => v !== undefined);
   },
 
@@ -133,8 +168,7 @@ const Quiz = {
 
     this._answered = false;
 
-    const counter = document.getElementById('quiz-counter');
-    counter.textContent = `${this.currentIndex + 1} / ${this.queue.length}`;
+    this.updateCounter();
 
     const { options, correctIndex } = this.generateOptions(verb);
     this._correctIndex = correctIndex;
@@ -242,7 +276,7 @@ const Quiz = {
     });
 
     // Dodaj do kolejki zapisów SM2
-    this.enqueueSave(Auth.currentUser.id, verb.id, isCorrect);
+    this.enqueueSave(Auth.currentUser.id, verb.id, isCorrect, this.dailyKey);
 
     // Podświetl odpowiedzi
     this.showResult(index, isCorrect);
@@ -272,38 +306,46 @@ const Quiz = {
   /**
    * Przejdź do następnego pytania lub zakończ sesję
    */
-  next() {
+  async next() {
     this.currentIndex++;
 
-    // Komunikat zachęty po osiągnięciu celu dziennego
-    if (!this.goalReached && this.sessionResults.length >= this.dailyGoal) {
+    if (!this.goalReached && this.currentIndex === this.phaseBEnd) {
       this.goalReached = true;
       this.showGoalReached();
       return;
     }
 
     if (this.currentIndex >= this.queue.length) {
+      if (this.inPhaseC && this.remainingPhaseCIds.length > 0) {
+        await this.appendPhaseCChunk();
+        this.showQuestion();
+        return;
+      }
+
       this.endSession();
-    } else {
-      this.showQuestion();
+      return;
     }
+
+    this.showQuestion();
   },
 
   /**
    * Pokaż komunikat o osiągnięciu celu dziennego
    */
   showGoalReached() {
-    const remaining = this.queue.length - this.currentIndex;
+    const remainingNew = this.remainingPhaseCIds.length;
     const content = document.getElementById('quiz-content');
     content.innerHTML = `
       <div class="text-center" style="padding: 32px 24px;">
         <div style="font-size: 2.5rem; margin-bottom: 12px;">&#127942;</div>
         <h2 style="margin-bottom: 8px; color: var(--green);">Cel dzienny osiągnięty!</h2>
-        <p class="text-muted mb-24">Przerobiłeś już ${this.dailyGoal} pytań w quizie. Świetna robota!</p>
-        ${remaining > 0 ? `
-          <p class="mb-24">Zostało jeszcze <strong>${remaining}</strong> pytań do przerobienia.</p>
-          <button class="btn btn-primary btn-lg mb-16" style="width:100%;" onclick="Quiz.continueAfterGoal()">Kontynuuj quiz</button>
-        ` : ''}
+        <p class="text-muted mb-24">Nowe pytania i powtórki na dziś są zrobione.</p>
+        ${remainingNew > 0 ? `
+          <p class="mb-24">Zostało jeszcze <strong>${remainingNew}</strong> nowych pytań do przerobienia.</p>
+        ` : `
+          <p class="mb-24 text-muted">Brak kolejnych nowych pytań na dziś.</p>
+        `}
+        <button class="btn btn-primary btn-lg mb-16" style="width:100%;" onclick="Quiz.continueAfterGoal()">Kontynuuj quiz</button>
         <button class="btn btn-outline btn-lg" style="width:100%;" onclick="Quiz.endSession()">Zakończ sesję</button>
       </div>
     `;
@@ -312,19 +354,102 @@ const Quiz = {
   /**
    * Kontynuuj quiz po osiągnięciu celu
    */
-  continueAfterGoal() {
-    if (this.currentIndex >= this.queue.length) {
+  async continueAfterGoal() {
+    this.inPhaseC = true;
+
+    if (this.remainingPhaseCIds.length === 0) {
       this.endSession();
-    } else {
+      return;
+    }
+
+    if (this.currentIndex >= this.queue.length) {
+      await this.appendPhaseCChunk();
       this.showQuestion();
+      return;
+    }
+
+    this.showQuestion();
+  },
+
+  /**
+   * Aktualizuj licznik w nagłówku (Nowe / Powtórki / brak)
+   */
+  updateCounter() {
+    const counter = document.getElementById('quiz-counter');
+    if (!counter) return;
+
+    let text = '';
+    if (this.currentIndex < this.phaseAEnd) {
+      text = `Nowe: pozostało ${this.phaseAEnd - this.currentIndex}`;
+    } else if (this.currentIndex < this.phaseBEnd) {
+      text = `Powtórki: pozostało ${this.phaseBEnd - this.currentIndex}`;
+    }
+
+    counter.textContent = text;
+    counter.classList.toggle('hidden', text === '');
+  },
+
+  /**
+   * Lokalny klucz dnia w formacie YYYY-MM-DD
+   */
+  getLocalDateKey(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  },
+
+  /**
+   * Deterministyczny hash dla losowania dziennego
+   */
+  hashString(str) {
+    let hash = 5381;
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) + hash) + str.charCodeAt(i);
+    }
+    return hash >>> 0;
+  },
+
+  dailyShuffleKey(userId, dailyKey, verbId) {
+    return this.hashString(`${userId}|${dailyKey}|${verbId}`);
+  },
+
+  sortDailyNewIds(ids, userId, dailyKey) {
+    return [...ids].sort((a, b) => {
+      const keyA = this.dailyShuffleKey(userId, dailyKey, a);
+      const keyB = this.dailyShuffleKey(userId, dailyKey, b);
+      if (keyA !== keyB) return keyA - keyB;
+      return a - b;
+    });
+  },
+
+  async appendPhaseCChunk() {
+    if (this._loadingMore) return;
+    this._loadingMore = true;
+    const BATCH_SIZE = 50;
+    const nextIds = this.remainingPhaseCIds.slice(0, BATCH_SIZE);
+    this.remainingPhaseCIds = this.remainingPhaseCIds.slice(BATCH_SIZE);
+
+    if (nextIds.length === 0) {
+      this._loadingMore = false;
+      return;
+    }
+
+    try {
+      const nextVerbs = nextIds
+        .map(id => this.verbMap[id])
+        .filter(v => v !== undefined);
+      this.queue = this.queue.concat(nextVerbs);
+    } finally {
+      this._loadingMore = false;
     }
   },
 
   /**
    * Kolejkuj zapis SM2 — wykonuje zapisy jeden po drugim
    */
-  enqueueSave(userId, verbId, known) {
-    this._saveQueue.push({ userId, verbId, known });
+  enqueueSave(userId, verbId, known, dailyKey) {
+    this._saveQueue.push({ userId, verbId, known, dailyKey });
     this._processSaveQueue();
   },
 
@@ -333,9 +458,9 @@ const Quiz = {
     this._saving = true;
 
     while (this._saveQueue.length > 0) {
-      const { userId, verbId, known } = this._saveQueue.shift();
+      const { userId, verbId, known, dailyKey } = this._saveQueue.shift();
       try {
-        await SM2.saveAnswer(userId, verbId, known);
+        await SM2.saveAnswer(userId, verbId, known, dailyKey);
       } catch (err) {
         console.error('Błąd zapisu SM2 (quiz):', err);
       }

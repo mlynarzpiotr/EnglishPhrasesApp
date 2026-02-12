@@ -141,6 +141,7 @@ Postępy użytkownika — jedna pozycja na każdy phrasal verb na każdego użyt
 | times_seen | INTEGER | Ile razy użytkownik widział ten phrasal verb |
 | times_known | INTEGER | Ile razy odpowiedział "wiem" |
 | times_unknown | INTEGER | Ile razy odpowiedział "nie wiem" |
+| first_seen_on | DATE | Dzień, w którym phrasal verb po raz pierwszy trafił do dziennego pakietu |
 | created_at | TIMESTAMP | Kiedy użytkownik po raz pierwszy zobaczył ten verb |
 
 **Ważne**: unikatowy indeks na parę `(user_id, verb_id)` — jeden rekord na użytkownika na phrasal verb.
@@ -195,21 +196,22 @@ im lepiej znasz materiał, tym rzadziej go powtarzasz. Naukowo udowodniona skute
 - `ease_factor` maleje: `ease_factor += 0.1 - (5-1) × (0.08 + (5-1) × 0.02)` → `−0.30` (ale nie mniej niż 1.3)
 - `next_review = now + 1`
 
-### 5.3 Kolejność prezentowania phrasal verbs
-Priorytet wyświetlania (od najwyższego):
-1. **Zaległe** — `next_review <= dzisiaj` (posortowane od najstarszej zaległości)
-2. **Nowe** — WSZYSTKIE phrasal verbs których użytkownik jeszcze nie widział (bez twardego limitu)
-3. **Przyszłe** — nie pokazuj phrasal verbs których `next_review` jest w przyszłości
+### 5.3 Kolejność prezentowania phrasal verbs (tryb dzienny)
+Sesja jest podzielona na etapy:
+1. **Nowe (pakiet dzienny)** — liczba nowych = `daily_goal`. Jeśli użytkownik zrobi część, reszta czeka do końca dnia.
+2. **Powtórki zaległe** — `next_review <= teraz` (od najstarszej zaległości).
+3. **Reszta nowych (opcjonalnie)** — po komunikacie o wykonaniu celu dziennego, tylko jeśli użytkownik wybierze „Kontynuuj”.
 
-**Brak twardego limitu** — użytkownik ma dostęp do całego repozytorium phrasal verbs w każdej sesji.
+**Losowość dzienna**: nowe fiszki są losowane stabilnie na dany dzień (ten sam porządek w kolejnych logowaniach).
+**Brak twardego limitu** — użytkownik może przerobić wszystkie nowe, ale są dociągane w porcjach.
 
-### 5.4 Cel dzienny (motywacja, nie limit)
-- Domyślna wartość: **10 phrasal verbs dziennie** (konfigurowalne w ustawieniach)
-- Służy jako **próg motywacyjny**, nie blokada
-- Po osiągnięciu celu dziennego → komunikat "Cel dzienny osiągnięty!" z opcjami:
-  - "Kontynuuj naukę" → dalsze przerabianie fiszek
-  - "Zakończ sesję" → podsumowanie i zapis
-- Użytkownik sam decyduje kiedy kończy sesję
+### 5.4 Cel dzienny (nowe fiszki, nie limit)
+- Domyślna wartość: **10 nowych phrasal verbs dziennie** (konfigurowalne w ustawieniach)
+- To **dzienny pakiet nowych**, nie twardy limit sesji
+- Po przerobieniu **nowych + powtórek** → komunikat „Cel dzienny osiągnięty!”
+  - „Kontynuuj naukę” → dalsze **nowe** fiszki (reszta puli)
+  - „Zakończ sesję” → podsumowanie i zapis
+- Jeśli użytkownik wraca tego samego dnia, dostaje **pozostałe nowe** z dziennego pakietu
 
 ---
 
@@ -234,7 +236,10 @@ Priorytet wyświetlania (od najwyższego):
 - Kategoria i rejestr (małe tagi, np. `business` `formal`)
 - Przycisk wymowy (ikona głośnika — Web Speech API)
 - Dwa przyciski: "Wiem ✓" / "Nie wiem ✗"
-- Licznik: "5 / 15" (aktualny / do przerobienia w sesji)
+- Licznik etapu:
+  - **Nowe: pozostało X** (w pakiecie dziennym)
+  - **Powtórki: pozostało X**
+  - Brak licznika w etapie „reszta nowych”
 
 **Stan 2 — odpowiedź (po kliknięciu "wiem" lub "nie wiem"):**
 - Phrasal verb (nadal widoczny)
@@ -478,3 +483,9 @@ Sugerowana kolejność budowania aplikacji (od fundamentów do detali):
 22. Optymalizacja mobilna
 23. Deploy na GitHub Pages
 24. Ręczne ustawienie pierwszego konta admina w Supabase
+
+---
+
+## 14. Dokumentacja
+
+- Skrócony opis i checklistę testów manualnych znajdziesz w `README.md`.

@@ -10,6 +10,9 @@
 
 ## ⚠️ Ważne (po deployem)
 
+- [ ] **Wykonać migrację `first_seen_on` w Supabase**
+  - Uruchomić `sql/005_add_first_seen_on.sql`
+
 - [ ] **Testy na innych przeglądarkach**
   - Chrome/Edge (Chromium)
   - Safari (macOS/iOS)
@@ -102,7 +105,8 @@
 
 - [x] `INSTRUKCJE.md` — pełna specyfikacja
 - [x] `docs/jak-dziala-sm2.md` — wyjaśnienie algorytmu
-- [ ] `README.md` — opis projektu dla GitHub
+- [x] Aktualizacja dokumentacji po zmianie dziennego pakietu (INSTRUKCJE.md, docs/jak-dziala-sm2.md)
+- [x] `README.md` — opis projektu dla GitHub + checklist testów manualnych
   - Funkcje, stack technologiczny, setup, deploy
 - [ ] Screenshoty do README
   - Ekran logowania, fiszki, dashboard, podsumowanie

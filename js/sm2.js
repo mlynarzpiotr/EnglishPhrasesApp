@@ -15,6 +15,16 @@ const SM2 = {
   },
 
   /**
+   * Lokalny klucz dnia w formacie YYYY-MM-DD
+   */
+  getLocalDateKey(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  },
+
+  /**
    * Oblicz nowe parametry po odpowiedzi użytkownika
    *
    * @param {Object} progress - aktualny stan postępu użytkownika
@@ -75,9 +85,12 @@ const SM2 = {
    * @param {string} userId - UUID użytkownika
    * @param {number} verbId - ID phrasal verb
    * @param {boolean} known - true = "wiem", false = "nie wiem"
+   * @param {string} dailyKey - klucz dnia sesji (YYYY-MM-DD)
    * @returns {Object} - zaktualizowany rekord user_progress
    */
-  async saveAnswer(userId, verbId, known) {
+  async saveAnswer(userId, verbId, known, dailyKey) {
+    const dayKey = dailyKey || this.getLocalDateKey();
+
     // Pobierz aktualny postęp (lub utwórz nowy)
     let { data: progress, error } = await supabase
       .from('user_progress')
@@ -124,6 +137,7 @@ const SM2 = {
     let result;
 
     if (isNew) {
+      record.first_seen_on = dayKey;
       // Wstaw nowy rekord
       result = await supabase
         .from('user_progress')

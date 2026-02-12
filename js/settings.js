@@ -17,9 +17,10 @@ const Settings = {
     return `
       <!-- Cel dzienny -->
       <div class="settings-group">
-        <h3>Cel dzienny (motywacja)</h3>
+        <h3>Cel dzienny nowych fiszek</h3>
         <p class="text-muted mb-16" style="font-size:0.8rem;">
-          Po przerobeniu tylu fiszek pojawi się komunikat zachęty. To nie jest limit — możesz uczyć się dalej.
+          Tyle nowych fiszek dostaniesz na start dnia. Po nowych i powtórkach pojawi się komunikat o wykonaniu celu,
+          a potem możesz kontynuować naukę.
         </p>
         <div class="setting-row">
           <span class="setting-label">Liczba fiszek</span>

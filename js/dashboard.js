@@ -159,8 +159,31 @@ const Dashboard = {
         </div>`;
     }
 
-    // --- Historia sesji (ostatnie 7) ---
-    const recentSessions = sessions.slice(0, 7);
+    // --- Historia sesji (agregacja dzienna, ostatnie 7 dni) ---
+    const sessionsByDate = new Map();
+    sessions.forEach(s => {
+      const key = s.date;
+      if (!sessionsByDate.has(key)) {
+        sessionsByDate.set(key, {
+          date: s.date,
+          total_reviewed: s.total_reviewed,
+          total_known: s.total_known,
+          total_unknown: s.total_unknown,
+          duration_seconds: s.duration_seconds
+        });
+      } else {
+        const agg = sessionsByDate.get(key);
+        agg.total_reviewed += s.total_reviewed;
+        agg.total_known += s.total_known;
+        agg.total_unknown += s.total_unknown;
+        agg.duration_seconds += s.duration_seconds;
+      }
+    });
+
+    const aggregatedSessions = Array.from(sessionsByDate.values())
+      .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    const recentSessions = aggregatedSessions.slice(0, 7);
     if (recentSessions.length > 0) {
       html += `
         <div class="settings-group mb-24">

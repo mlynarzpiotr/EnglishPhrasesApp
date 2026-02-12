@@ -40,6 +40,7 @@ CREATE TABLE public.user_progress (
   times_seen INTEGER NOT NULL DEFAULT 0,
   times_known INTEGER NOT NULL DEFAULT 0,
   times_unknown INTEGER NOT NULL DEFAULT 0,
+  first_seen_on DATE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE(user_id, verb_id)
 );

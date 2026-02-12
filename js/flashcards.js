@@ -11,6 +11,15 @@ const Flashcards = {
   sessionStart: null, // czas rozpoczęcia sesji
   _saveQueue: [],     // kolejka zapisów SM2 (sekwencyjna, nie równoległa)
   _saving: false,     // czy aktualnie trwa zapis do bazy
+  dailyKey: null,
+  dailyNewTarget: 0,
+  dailyNewDone: 0,
+  remainingPhaseCIds: [],
+  phaseAEnd: 0,
+  phaseBEnd: 0,
+  goalReached: false,
+  inPhaseC: false,
+  _loadingMore: false,
 
   /**
    * Rozpocznij sesję nauki
@@ -20,6 +29,9 @@ const Flashcards = {
     this.currentIndex = 0;
     this.sessionResults = [];
     this.sessionStart = new Date();
+    this.goalReached = false;
+    this.inPhaseC = false;
+    this._loadingMore = false;
 
     const flashcard = document.getElementById('flashcard');
     flashcard.innerHTML = '<div class="loading-text"><span class="spinner"></span> Ładowanie fiszek...</div>';
@@ -27,13 +39,20 @@ const Flashcards = {
     try {
       await this.loadQueue();
 
-      if (this.queue.length === 0) {
+      if (this.queue.length === 0 && this.remainingPhaseCIds.length === 0) {
         flashcard.innerHTML = `
           <div class="text-center" style="padding: 48px 24px;">
             <p style="font-size: 1.2rem; margin-bottom: 16px;">Brak fiszek na dziś!</p>
             <p class="text-muted">Wróć jutro na kolejne powtórki.</p>
             <button class="btn btn-outline mt-24" onclick="App.showScreen('home')">Wróć do ekranu głównego</button>
           </div>`;
+        return;
+      }
+
+      if (this.phaseBEnd === 0 && this.remainingPhaseCIds.length > 0) {
+        // Brak nowych dziennych i powtórek — pokaż komunikat celu od razu
+        this.goalReached = true;
+        this.showGoalReached();
         return;
       }
 
@@ -61,8 +80,11 @@ const Flashcards = {
   async loadQueue() {
     const userId = Auth.currentUser.id;
     const now = new Date().toISOString();
-    this.dailyGoal = Auth.currentProfile.daily_goal || 10;
+    this.dailyKey = this.getLocalDateKey();
+    this.dailyNewTarget = Auth.currentProfile.daily_goal || 10;
     this.goalReached = false;
+    this.inPhaseC = false;
+    this.remainingPhaseCIds = [];
 
     // 1. Zaległe — phrasal verbs z next_review <= teraz
     const { data: overdue, error: overdueErr } = await supabase
@@ -89,38 +111,38 @@ const Flashcards = {
       .select('id')
       .order('id', { ascending: true });
 
-    const newVerbIds = (allVerbs || [])
+    const unseenIds = (allVerbs || [])
       .map(v => v.id)
       .filter(id => !seenIds.includes(id));
 
-    // 3. Połącz kolejkę: zaległe najpierw, potem nowe
-    const allIds = [...overdueVerbIds, ...newVerbIds];
+    // 3. Liczba nowych zrobionych dziś
+    const { count: dailyNewDone, error: dailyNewErr } = await supabase
+      .from('user_progress')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('first_seen_on', this.dailyKey);
 
-    if (allIds.length === 0) {
-      this.queue = [];
-      return;
-    }
+    if (dailyNewErr) throw dailyNewErr;
 
-    // FIX: Limit to 50 items to avoid Supabase "Request-URI Too Long" error
-    // Jeśli allIds > 50, bierzemy tylko pierwsze 50 (najpilniejsze zaległe + trochę nowych)
-    const BATCH_SIZE = 50;
-    const batchIds = allIds.slice(0, BATCH_SIZE);
+    this.dailyNewDone = dailyNewDone || 0;
+    const dailyNewRemaining = Math.max(0, this.dailyNewTarget - this.dailyNewDone);
 
-    // Pobierz pełne dane phrasal verbs (Supabase .in() limit: 300)
-    const { data: verbs, error: verbsErr } = await supabase
-      .from('phrasal_verbs')
-      .select('*')
-      .in('id', batchIds);
+    // 4. Dzienna losowość (stabilna w ciągu dnia)
+    const sortedNewIds = this.sortDailyNewIds(unseenIds, userId, this.dailyKey);
 
-    if (verbsErr) throw verbsErr;
+    // Etap A: dzienny pakiet nowych
+    const phaseAIds = sortedNewIds.slice(0, dailyNewRemaining);
 
-    // Zachowaj kolejność: zaległe (od najstarszych) → nowe (po ID)
-    const verbMap = {};
-    (verbs || []).forEach(v => { verbMap[v.id] = v; });
+    // Etap C: pozostałe nowe (opcjonalne po "Kontynuuj")
+    this.remainingPhaseCIds = sortedNewIds.slice(dailyNewRemaining);
 
-    this.queue = allIds
-      .map(id => verbMap[id])
-      .filter(v => v !== undefined);
+    // Etap B: zaległe powtórki
+    const initialIds = [...phaseAIds, ...overdueVerbIds];
+
+    this.phaseAEnd = phaseAIds.length;
+    this.phaseBEnd = phaseAIds.length + overdueVerbIds.length;
+
+    this.queue = await this.fetchVerbsByIds(initialIds);
   },
 
   /**
@@ -130,8 +152,7 @@ const Flashcards = {
     const verb = this.queue[this.currentIndex];
     if (!verb) return;
 
-    const counter = document.getElementById('flashcard-counter');
-    counter.textContent = `${this.currentIndex + 1} / ${this.queue.length}`;
+    this.updateCounter();
 
     const flashcard = document.getElementById('flashcard');
     flashcard.innerHTML = `
@@ -166,7 +187,7 @@ const Flashcards = {
     });
 
     // Dodaj do kolejki zapisów (sekwencyjnie, nie równolegle)
-    this.enqueueSave(Auth.currentUser.id, verb.id, known);
+    this.enqueueSave(Auth.currentUser.id, verb.id, known, this.dailyKey);
 
     // Pokaż odpowiedź
     this.showAnswer(verb, known);
@@ -232,38 +253,47 @@ const Flashcards = {
   /**
    * Przejdź do następnej fiszki lub zakończ sesję
    */
-  next() {
+  async next() {
     this.currentIndex++;
 
-    // Komunikat zachęty po osiągnięciu celu dziennego
-    if (!this.goalReached && this.sessionResults.length >= this.dailyGoal) {
+    // Po ukończeniu etapów A + B pokaż komunikat o celu dziennym
+    if (!this.goalReached && this.currentIndex === this.phaseBEnd) {
       this.goalReached = true;
       this.showGoalReached();
       return;
     }
 
     if (this.currentIndex >= this.queue.length) {
+      if (this.inPhaseC && this.remainingPhaseCIds.length > 0) {
+        await this.appendPhaseCChunk();
+        this.showQuestion();
+        return;
+      }
+
       this.endSession();
-    } else {
-      this.showQuestion();
+      return;
     }
+
+    this.showQuestion();
   },
 
   /**
    * Pokaż komunikat o osiągnięciu celu dziennego
    */
   showGoalReached() {
-    const remaining = this.queue.length - this.currentIndex;
+    const remainingNew = this.remainingPhaseCIds.length;
     const flashcard = document.getElementById('flashcard');
     flashcard.innerHTML = `
       <div class="text-center" style="padding: 32px 24px;">
         <div style="font-size: 2.5rem; margin-bottom: 12px;">&#127942;</div>
         <h2 style="margin-bottom: 8px; color: var(--green);">Cel dzienny osiągnięty!</h2>
-        <p class="text-muted mb-24">Przerobiłeś już ${this.dailyGoal} fiszek. Świetna robota!</p>
-        ${remaining > 0 ? `
-          <p class="mb-24">Zostało jeszcze <strong>${remaining}</strong> fiszek do przerobienia.</p>
-          <button class="btn btn-primary btn-lg mb-16" style="width:100%;" onclick="Flashcards.continueAfterGoal()">Kontynuuj naukę</button>
-        ` : ''}
+        <p class="text-muted mb-24">Nowe fiszki i powtórki na dziś są zrobione.</p>
+        ${remainingNew > 0 ? `
+          <p class="mb-24">Zostało jeszcze <strong>${remainingNew}</strong> nowych fiszek do przerobienia.</p>
+        ` : `
+          <p class="mb-24 text-muted">Brak kolejnych nowych fiszek na dziś.</p>
+        `}
+        <button class="btn btn-primary btn-lg mb-16" style="width:100%;" onclick="Flashcards.continueAfterGoal()">Kontynuuj naukę</button>
         <button class="btn btn-outline btn-lg" style="width:100%;" onclick="Flashcards.endSession()">Zakończ sesję</button>
       </div>
     `;
@@ -272,11 +302,111 @@ const Flashcards = {
   /**
    * Kontynuuj naukę po osiągnięciu celu
    */
-  continueAfterGoal() {
-    if (this.currentIndex >= this.queue.length) {
+  async continueAfterGoal() {
+    this.inPhaseC = true;
+
+    if (this.remainingPhaseCIds.length === 0) {
       this.endSession();
-    } else {
+      return;
+    }
+
+    if (this.currentIndex >= this.queue.length) {
+      await this.appendPhaseCChunk();
       this.showQuestion();
+      return;
+    }
+
+    this.showQuestion();
+  },
+
+  /**
+   * Aktualizuj licznik w nagłówku (Nowe / Powtórki / brak)
+   */
+  updateCounter() {
+    const counter = document.getElementById('flashcard-counter');
+    if (!counter) return;
+
+    let text = '';
+    if (this.currentIndex < this.phaseAEnd) {
+      text = `Nowe: pozostało ${this.phaseAEnd - this.currentIndex}`;
+    } else if (this.currentIndex < this.phaseBEnd) {
+      text = `Powtórki: pozostało ${this.phaseBEnd - this.currentIndex}`;
+    }
+
+    counter.textContent = text;
+    counter.classList.toggle('hidden', text === '');
+  },
+
+  /**
+   * Lokalny klucz dnia w formacie YYYY-MM-DD
+   */
+  getLocalDateKey(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  },
+
+  /**
+   * Deterministyczny hash dla losowania dziennego
+   */
+  hashString(str) {
+    let hash = 5381;
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) + hash) + str.charCodeAt(i);
+    }
+    return hash >>> 0;
+  },
+
+  dailyShuffleKey(userId, dailyKey, verbId) {
+    return this.hashString(`${userId}|${dailyKey}|${verbId}`);
+  },
+
+  sortDailyNewIds(ids, userId, dailyKey) {
+    return [...ids].sort((a, b) => {
+      const keyA = this.dailyShuffleKey(userId, dailyKey, a);
+      const keyB = this.dailyShuffleKey(userId, dailyKey, b);
+      if (keyA !== keyB) return keyA - keyB;
+      return a - b;
+    });
+  },
+
+  async fetchVerbsByIds(ids) {
+    if (!ids || ids.length === 0) return [];
+    const BATCH_SIZE = 50;
+    const verbMap = {};
+
+    for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+      const batchIds = ids.slice(i, i + BATCH_SIZE);
+      const { data: verbs, error: verbsErr } = await supabase
+        .from('phrasal_verbs')
+        .select('*')
+        .in('id', batchIds);
+
+      if (verbsErr) throw verbsErr;
+      (verbs || []).forEach(v => { verbMap[v.id] = v; });
+    }
+
+    return ids.map(id => verbMap[id]).filter(v => v !== undefined);
+  },
+
+  async appendPhaseCChunk() {
+    if (this._loadingMore) return;
+    this._loadingMore = true;
+    const BATCH_SIZE = 50;
+    const nextIds = this.remainingPhaseCIds.slice(0, BATCH_SIZE);
+    this.remainingPhaseCIds = this.remainingPhaseCIds.slice(BATCH_SIZE);
+
+    if (nextIds.length === 0) {
+      this._loadingMore = false;
+      return;
+    }
+
+    try {
+      const nextVerbs = await this.fetchVerbsByIds(nextIds);
+      this.queue = this.queue.concat(nextVerbs);
+    } finally {
+      this._loadingMore = false;
     }
   },
 
@@ -284,8 +414,8 @@ const Flashcards = {
    * Kolejkuj zapis SM2 — wykonuje zapisy jeden po drugim,
    * zamiast bombardować bazę wieloma równoległymi requestami.
    */
-  enqueueSave(userId, verbId, known) {
-    this._saveQueue.push({ userId, verbId, known });
+  enqueueSave(userId, verbId, known, dailyKey) {
+    this._saveQueue.push({ userId, verbId, known, dailyKey });
     this._processSaveQueue();
   },
 
@@ -294,9 +424,9 @@ const Flashcards = {
     this._saving = true;
 
     while (this._saveQueue.length > 0) {
-      const { userId, verbId, known } = this._saveQueue.shift();
+      const { userId, verbId, known, dailyKey } = this._saveQueue.shift();
       try {
-        await SM2.saveAnswer(userId, verbId, known);
+        await SM2.saveAnswer(userId, verbId, known, dailyKey);
       } catch (err) {
         console.error('Błąd zapisu SM2:', err);
       }

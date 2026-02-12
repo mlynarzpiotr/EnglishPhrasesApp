@@ -79,13 +79,18 @@ Zauważ: po jednej odpowiedzi "nie wiem" w dniu 8, fiszka wróciła na początek
 
 ---
 
-## Kolejność prezentowania fiszek
+## Kolejność prezentowania fiszek (tryb dzienny)
 
-Aplikacja pokazuje fiszki w takiej kolejności:
+Sesja ma trzy etapy:
 
-1. **Zaległe** — te których termin powtórki już minął (najpierw najstarsze zaległości)
-2. **Nowe** — phrasal verbs których jeszcze nie widziałeś (max 5 dziennie, konfigurowalne)
-3. **Przyszłe** — NIE pokazuje fiszek których termin jest w przyszłości
+1. **Nowe (pakiet dzienny)** — dostajesz określoną liczbę nowych fiszek na start dnia (domyślnie 10, ustawialne).
+   Jeśli zrobisz tylko część, reszta czeka do końca dnia i pojawi się przy kolejnym logowaniu.
+2. **Powtórki zaległe** — fiszki, których termin powtórki już minął (najpierw najstarsze zaległości).
+3. **Reszta nowych (opcjonalnie)** — po komunikacie „cel dzienny osiągnięty” możesz kontynuować i przerabiać
+   kolejne nowe fiszki aż do wyczerpania puli.
+
+**Ważne:** nowe fiszki są losowane stabilnie na dany dzień, więc przy kolejnym logowaniu
+zobaczysz te same „pozostałe” nowe, a nie inne.
 
 ---
 
@@ -97,3 +102,7 @@ Bazuje na **krzywej zapominania Ebbinghausa** (1885):
 - Każda powtórka wydłuża czas zapamiętywania
 
 SM-2 oblicza **optymalny moment powtórki** — nie za wcześnie (strata czasu), nie za późno (już zapomniałeś).
+
+---
+
+Checklistę testów manualnych znajdziesz w `README.md`.
