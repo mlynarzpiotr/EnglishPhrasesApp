@@ -71,6 +71,7 @@ Rozszerzenie wbudowanej tabeli `auth.users` z Supabase.
 | approved | BOOLEAN | `false` domyślnie, `true` po zatwierdzeniu |
 | created_at | TIMESTAMP | Data rejestracji |
 | daily_goal | INTEGER | Dzienny cel (domyślnie 10) |
+| difficulty_filter | TEXT | Filtr poziomu: `all`, `B2`, `C1` (domyślnie `all`) |
 
 ### 4.2 Tabela `phrasal_verbs`
 Główna tabela z zawartością edukacyjną.
@@ -273,9 +274,9 @@ Wyświetla się po przerobeniu wszystkich fiszek w sesji:
 
 ### 6.6 Ustawienia
 - Dzienny cel motywacyjny (slider: 3-30, domyślnie 10) — próg po którym pojawia się komunikat zachęty, nie limit
+- Filtr poziomu (radio: all / B2 / C1) — dotyczy tylko nowych fiszek
 - Filtr kategorii do nauki (checkboxy: business, general, all)
 - Filtr tagów (checkboxy: meetings, emails, negotiations, itp.)
-- Filtr poziomu trudności (B2, C1, all)
 - Wyloguj się
 
 ### 6.7 Panel admina (tylko admin)

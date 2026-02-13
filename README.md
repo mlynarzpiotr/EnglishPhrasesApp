@@ -5,6 +5,7 @@ Aplikacja webowa do nauki phrasal verbs metodą fiszek, z algorytmem SM-2 oraz d
 ## Najważniejsze funkcje
 - Fiszki + inteligentne powtórki (SM-2)
 - Dzienny pakiet nowych fiszek (kontynuowany między logowaniami tego samego dnia)
+- Filtr poziomu (B2/C1/All) dla nowych fiszek
 - Tryb quiz
 - Wymowa (Web Speech API)
 - Dashboard postępów
@@ -17,6 +18,8 @@ Aplikacja webowa do nauki phrasal verbs metodą fiszek, z algorytmem SM-2 oraz d
 
 Nowe fiszki są losowane stabilnie **per dzień**, więc przy kolejnym logowaniu
 zobaczysz pozostałe „brakujące” nowe, a nie inne.
+
+Filtr poziomu (B2/C1/All) dotyczy tylko nowych fiszek — powtórki zawsze się pojawiają.
 
 ## Stack
 - HTML/CSS/Vanilla JS
@@ -33,6 +36,7 @@ zobaczysz pozostałe „brakujące” nowe, a nie inne.
 - `sql/001_create_tables.sql`
 - `sql/003_fix_admin_policies.sql`
 - `sql/005_add_first_seen_on.sql` (dla istniejących baz)
+- `sql/006_add_difficulty_filter.sql` (dla istniejących baz)
 
 ## Checklist testów manualnych
 - Logowanie/rejestracja, konto czeka na zatwierdzenie, zatwierdzenie admina.

@@ -14,6 +14,8 @@ const Quiz = {
   _saveQueue: [],
   _saving: false,
   dailyKey: null,
+  difficultyFilter: 'all',
+  distractorPool: [],
   dailyNewTarget: 0,
   dailyNewDone: 0,
   remainingPhaseCIds: [],
@@ -86,6 +88,7 @@ const Quiz = {
     const now = new Date().toISOString();
     this.dailyKey = this.getLocalDateKey();
     this.dailyNewTarget = Auth.currentProfile.daily_goal || 10;
+    this.difficultyFilter = (Auth.currentProfile && Auth.currentProfile.difficulty_filter) || 'all';
     this.goalReached = false;
     this.inPhaseC = false;
     this.remainingPhaseCIds = [];
@@ -120,16 +123,33 @@ const Quiz = {
 
     this.allVerbs = allVerbsData || [];
 
-    const unseenIds = this.allVerbs
+    const filteredPool = this.difficultyFilter === 'all'
+      ? this.allVerbs
+      : this.allVerbs.filter(v => v.difficulty === this.difficultyFilter);
+
+    this.distractorPool = filteredPool;
+
+    const unseenIds = filteredPool
       .map(v => v.id)
       .filter(id => !seenIds.includes(id));
 
     // 4. Liczba nowych zrobionych dziś
-    const { count: dailyNewDone, error: dailyNewErr } = await supabase
+    let dailyNewQuery = supabase
       .from('user_progress')
-      .select('*', { count: 'exact', head: true })
+      .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
       .eq('first_seen_on', this.dailyKey);
+
+    if (this.difficultyFilter !== 'all') {
+      dailyNewQuery = supabase
+        .from('user_progress')
+        .select('id, phrasal_verbs!inner(difficulty)', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('first_seen_on', this.dailyKey)
+        .eq('phrasal_verbs.difficulty', this.difficultyFilter);
+    }
+
+    const { count: dailyNewDone, error: dailyNewErr } = await dailyNewQuery;
 
     if (dailyNewErr) throw dailyNewErr;
 
@@ -205,9 +225,11 @@ const Quiz = {
   generateOptions(verb) {
     const correctDef = verb.definition_en;
 
+    const pool = this.getDistractorPool(verb);
+
     // Filtruj kandydatów: inne phrasal verbs (nie ten sam)
-    // Preferuj tę samą kategorię lub poziom trudności
-    let candidates = this.allVerbs.filter(v => v.id !== verb.id);
+    // Preferuj tę samą kategorię
+    let candidates = pool.filter(v => v.id !== verb.id);
 
     // Spróbuj najpierw z tej samej kategorii
     let sameCat = candidates.filter(v => v.category === verb.category);
@@ -241,6 +263,19 @@ const Quiz = {
       options: shuffled.map(s => s.opt),
       correctIndex
     };
+  },
+
+  getDistractorPool(verb) {
+    if (this.difficultyFilter === 'all') return this.allVerbs;
+
+    if (verb.difficulty === this.difficultyFilter) {
+      return this.distractorPool.length > 0 ? this.distractorPool : this.allVerbs;
+    }
+
+    const sameLevel = this.allVerbs.filter(v => v.difficulty === verb.difficulty);
+    if (sameLevel.length >= 4) return sameLevel;
+
+    return this.allVerbs;
   },
 
   /**

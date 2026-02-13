@@ -13,6 +13,7 @@ const Settings = {
 
   render(profile) {
     const dailyGoal = profile.daily_goal || 10;
+    const difficultyFilter = profile.difficulty_filter || 'all';
 
     return `
       <!-- Cel dzienny -->
@@ -26,6 +27,28 @@ const Settings = {
           <span class="setting-label">Liczba fiszek</span>
           <input type="range" id="setting-daily-goal" min="3" max="30" value="${dailyGoal}">
           <span class="setting-value" id="setting-daily-goal-value">${dailyGoal}</span>
+        </div>
+      </div>
+
+      <!-- Poziom nauki -->
+      <div class="settings-group">
+        <h3>Poziom nauki</h3>
+        <p class="text-muted mb-16" style="font-size:0.8rem;">
+          Wybór poziomu dotyczy tylko nowych fiszek. Powtórki zawsze się pojawiają.
+        </p>
+        <div class="checkbox-group">
+          <label class="checkbox-label">
+            <input type="radio" name="difficulty-filter" value="all" ${difficultyFilter === 'all' ? 'checked' : ''}>
+            Wszystkie
+          </label>
+          <label class="checkbox-label">
+            <input type="radio" name="difficulty-filter" value="B2" ${difficultyFilter === 'B2' ? 'checked' : ''}>
+            B2
+          </label>
+          <label class="checkbox-label">
+            <input type="radio" name="difficulty-filter" value="C1" ${difficultyFilter === 'C1' ? 'checked' : ''}>
+            C1
+          </label>
         </div>
       </div>
 
@@ -88,6 +111,26 @@ const Settings = {
       }
 
       Auth.currentProfile.daily_goal = newGoal;
+    });
+
+    // Filtr poziomu (B2/C1/All)
+    const filterRadios = container.querySelectorAll('input[name="difficulty-filter"]');
+    filterRadios.forEach(radio => {
+      radio.addEventListener('change', async () => {
+        if (!radio.checked) return;
+        const newFilter = radio.value;
+        const { error } = await supabase
+          .from('profiles')
+          .update({ difficulty_filter: newFilter })
+          .eq('id', Auth.currentUser.id);
+
+        if (error) {
+          alert('Błąd zapisu: ' + error.message);
+          return;
+        }
+
+        Auth.currentProfile.difficulty_filter = newFilter;
+      });
     });
 
     // Slider tempa wymowy

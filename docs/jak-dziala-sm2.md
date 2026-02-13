@@ -95,6 +95,9 @@ zobaczysz te same „pozostałe” nowe, a nie inne.
 Na ekranie startowym przycisk nauki pokazuje aktualny etap dnia:
 **Nowe**, **Powtórki** albo **Dodatkowe nowe**.
 
+Możesz też wybrać filtr poziomu (B2/C1). Dotyczy on tylko nowych fiszek —
+powtórki pozostają bez filtra, żeby nie psuć algorytmu SM-2.
+
 ---
 
 ## Dlaczego to działa?

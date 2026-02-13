@@ -239,9 +239,10 @@ const App = {
       const now = new Date().toISOString();
       const userId = Auth.currentUser.id;
       const dailyKey = this.getLocalDateKey();
+      const difficultyFilter = (Auth.currentProfile && Auth.currentProfile.difficulty_filter) || 'all';
 
       // Wszystkie zapytania RÓWNOLEGLE (zamiast 5 sekwencyjnych)
-      const [reviewRes, seenRes, allRes, knownRes, streakRes, dailyNewRes] = await Promise.all([
+      const baseQueries = [
         supabase.from('user_progress').select('*', { count: 'exact', head: true })
           .eq('user_id', userId).lte('next_review', now),
         supabase.from('user_progress').select('*', { count: 'exact', head: true })
@@ -249,10 +250,48 @@ const App = {
         supabase.from('phrasal_verbs').select('*', { count: 'exact', head: true }),
         supabase.from('user_progress').select('*', { count: 'exact', head: true })
           .eq('user_id', userId).gte('repetitions', 3),
-        supabase.from('streaks').select('*').eq('user_id', userId).single(),
-        supabase.from('user_progress').select('*', { count: 'exact', head: true })
-          .eq('user_id', userId).eq('first_seen_on', dailyKey)
-      ]);
+        supabase.from('streaks').select('*').eq('user_id', userId).single()
+      ];
+
+      let dailyNewQuery = supabase
+        .from('user_progress')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('first_seen_on', dailyKey);
+
+      if (difficultyFilter !== 'all') {
+        dailyNewQuery = supabase
+          .from('user_progress')
+          .select('id, phrasal_verbs!inner(difficulty)', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .eq('first_seen_on', dailyKey)
+          .eq('phrasal_verbs.difficulty', difficultyFilter);
+      }
+
+      const filteredAllQuery = difficultyFilter === 'all'
+        ? null
+        : supabase.from('phrasal_verbs').select('*', { count: 'exact', head: true })
+          .eq('difficulty', difficultyFilter);
+
+      const filteredSeenQuery = difficultyFilter === 'all'
+        ? null
+        : supabase.from('user_progress').select('id, phrasal_verbs!inner(difficulty)', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .eq('phrasal_verbs.difficulty', difficultyFilter);
+
+      const queries = [...baseQueries, dailyNewQuery, filteredAllQuery, filteredSeenQuery].filter(Boolean);
+      const results = await Promise.all(queries);
+
+      const [
+        reviewRes,
+        seenRes,
+        allRes,
+        knownRes,
+        streakRes,
+        dailyNewRes,
+        filteredAllRes,
+        filteredSeenRes
+      ] = results;
 
       // Jeśli użytkownik zmienił ekran w międzyczasie — nie aktualizuj DOM
       if (this.currentScreen !== 'home') return;
@@ -283,8 +322,17 @@ const App = {
       const dailyGoal = Auth.currentProfile.daily_goal || 10;
       const dailyNewDone = dailyNewRes.count || 0;
       const rawDailyRemaining = Math.max(0, dailyGoal - dailyNewDone);
-      const dailyNewRemaining = Math.min(rawDailyRemaining, toLearnCount);
-      const extraNewCount = Math.max(0, toLearnCount - dailyNewRemaining);
+
+      let filteredAllCount = allCount;
+      let filteredSeenCount = seenCount;
+      if (difficultyFilter !== 'all') {
+        filteredAllCount = (filteredAllRes && filteredAllRes.count) ? filteredAllRes.count : 0;
+        filteredSeenCount = (filteredSeenRes && filteredSeenRes.count) ? filteredSeenRes.count : 0;
+      }
+
+      const filteredToLearnCount = Math.max(0, filteredAllCount - filteredSeenCount);
+      const dailyNewRemaining = Math.min(rawDailyRemaining, filteredToLearnCount);
+      const extraNewCount = Math.max(0, filteredToLearnCount - dailyNewRemaining);
       const startBtn = document.getElementById('start-learn-btn');
       const quizBtn = document.getElementById('start-quiz-btn');
       if (totalAvailable === 0) {

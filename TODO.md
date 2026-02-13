@@ -13,6 +13,9 @@
 - [ ] **Wykonać migrację `first_seen_on` w Supabase**
   - Uruchomić `sql/005_add_first_seen_on.sql`
 
+- [ ] **Wykonać migrację `difficulty_filter` w Supabase**
+  - Uruchomić `sql/006_add_difficulty_filter.sql`
+
 - [ ] **Testy na innych przeglądarkach**
   - Chrome/Edge (Chromium)
   - Safari (macOS/iOS)
@@ -71,6 +74,9 @@
 
 - [x] **Dynamiczny tekst przycisku start (Home)**
   - Nowe / Powtórki / Dodatkowe nowe
+
+- [x] **Filtr poziomu nowych fiszek (B2/C1/All)**
+  - Ustawienie w profilu, filtr tylko dla nowych
 
 - [x] **Limitacja Supabase .in() — max 300**
   - Fix: podzielić na batche po 200 lub użyć paginacji (Zrobione: limit 50 na sesję)

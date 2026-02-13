@@ -82,6 +82,7 @@ const Flashcards = {
     const now = new Date().toISOString();
     this.dailyKey = this.getLocalDateKey();
     this.dailyNewTarget = Auth.currentProfile.daily_goal || 10;
+    const difficultyFilter = (Auth.currentProfile && Auth.currentProfile.difficulty_filter) || 'all';
     this.goalReached = false;
     this.inPhaseC = false;
     this.remainingPhaseCIds = [];
@@ -106,21 +107,38 @@ const Flashcards = {
 
     const seenIds = (seen || []).map(p => p.verb_id);
 
-    const { data: allVerbs } = await supabase
+    let verbsQuery = supabase
       .from('phrasal_verbs')
       .select('id')
       .order('id', { ascending: true });
+
+    if (difficultyFilter !== 'all') {
+      verbsQuery = verbsQuery.eq('difficulty', difficultyFilter);
+    }
+
+    const { data: allVerbs } = await verbsQuery;
 
     const unseenIds = (allVerbs || [])
       .map(v => v.id)
       .filter(id => !seenIds.includes(id));
 
     // 3. Liczba nowych zrobionych dziś
-    const { count: dailyNewDone, error: dailyNewErr } = await supabase
+    let dailyNewQuery = supabase
       .from('user_progress')
-      .select('*', { count: 'exact', head: true })
+      .select('id', { count: 'exact', head: true })
       .eq('user_id', userId)
       .eq('first_seen_on', this.dailyKey);
+
+    if (difficultyFilter !== 'all') {
+      dailyNewQuery = supabase
+        .from('user_progress')
+        .select('id, phrasal_verbs!inner(difficulty)', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('first_seen_on', this.dailyKey)
+        .eq('phrasal_verbs.difficulty', difficultyFilter);
+    }
+
+    const { count: dailyNewDone, error: dailyNewErr } = await dailyNewQuery;
 
     if (dailyNewErr) throw dailyNewErr;
 

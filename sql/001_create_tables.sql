@@ -10,6 +10,7 @@ CREATE TABLE public.profiles (
   role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user')),
   approved BOOLEAN NOT NULL DEFAULT false,
   daily_goal INTEGER NOT NULL DEFAULT 10,
+  difficulty_filter TEXT NOT NULL DEFAULT 'all' CHECK (difficulty_filter IN ('all', 'B2', 'C1')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
