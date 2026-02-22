@@ -20,6 +20,8 @@ const Flashcards = {
   goalReached: false,
   inPhaseC: false,
   _loadingMore: false,
+  _exiting: false,
+  _finalizing: false,
 
   /**
    * Rozpocznij sesję nauki
@@ -32,12 +34,17 @@ const Flashcards = {
     this.goalReached = false;
     this.inPhaseC = false;
     this._loadingMore = false;
+    this._exiting = false;
+    this._finalizing = false;
 
     const flashcard = document.getElementById('flashcard');
     flashcard.innerHTML = '<div class="loading-text"><span class="spinner"></span> Ładowanie fiszek...</div>';
 
     try {
       await this.loadQueue();
+
+      // Jeśli użytkownik opuścił ekran podczas ładowania, nie renderuj już fiszek
+      if (App.currentScreen !== 'learn' || this._exiting) return;
 
       if (this.queue.length === 0 && this.remainingPhaseCIds.length === 0) {
         flashcard.innerHTML = `
@@ -58,18 +65,10 @@ const Flashcards = {
 
       this.showQuestion();
     } catch (err) {
+      if (App.currentScreen !== 'learn' || this._exiting) return;
       console.error('Błąd ładowania fiszek:', err);
       flashcard.innerHTML = `<div class="alert alert-error">Błąd ładowania: ${err.message}</div>`;
     }
-
-    // Przycisk zamknięcia sesji
-    document.getElementById('flashcard-close').onclick = () => {
-      if (this.sessionResults.length > 0) {
-        this.endSession();
-      } else {
-        App.showScreen('home');
-      }
-    };
   },
 
   /**
@@ -288,7 +287,7 @@ const Flashcards = {
         return;
       }
 
-      this.endSession();
+      await this.endSession();
       return;
     }
 
@@ -335,6 +334,26 @@ const Flashcards = {
     }
 
     this.showQuestion();
+  },
+
+  /**
+   * Natychmiastowe wyjście do Home (bez podsumowania)
+   * z pełnym domknięciem zapisów sesji.
+   */
+  async exitToHome() {
+    if (this._exiting) return;
+    this._exiting = true;
+
+    try {
+      if (this.sessionResults.length === 0) {
+        App.showScreen('home');
+        return;
+      }
+
+      await this.finishSession({ showSummary: false });
+    } finally {
+      this._exiting = false;
+    }
   },
 
   /**
@@ -461,9 +480,8 @@ const Flashcards = {
     // Jeśli kolejka jest pusta i nic nie zapisuje — wróć od razu
     if (this._saveQueue.length === 0 && !this._saving) return;
 
-    // Czekaj max 10 sekund
-    const deadline = Date.now() + 10000;
-    while ((this._saveQueue.length > 0 || this._saving) && Date.now() < deadline) {
+    // Czekaj aż kolejka zapisów zostanie całkowicie opróżniona
+    while (this._saveQueue.length > 0 || this._saving) {
       await new Promise(r => setTimeout(r, 100));
     }
   },
@@ -472,32 +490,50 @@ const Flashcards = {
    * Zakończ sesję — zapisz log i pokaż podsumowanie
    */
   async endSession() {
-    // Poczekaj na zakończenie zapisów SM2 w tle
-    await this._waitForSaves();
-    const duration = Math.round((new Date() - this.sessionStart) / 1000);
-    const totalReviewed = this.sessionResults.length;
-    const totalKnown = this.sessionResults.filter(r => r.known).length;
-    const totalUnknown = totalReviewed - totalKnown;
+    await this.finishSession({ showSummary: true });
+  },
 
-    // Zapisz session_log do bazy
+  /**
+   * Wspólna finalizacja sesji:
+   * - showSummary=true: ekran podsumowania
+   * - showSummary=false: powrót na Home
+   */
+  async finishSession({ showSummary }) {
+    if (this._finalizing) return;
+    this._finalizing = true;
     try {
-      await supabase.from('session_log').insert({
-        user_id: Auth.currentUser.id,
-        date: new Date().toISOString().split('T')[0],
-        total_reviewed: totalReviewed,
-        total_known: totalKnown,
-        total_unknown: totalUnknown,
-        duration_seconds: duration
-      });
+      // Poczekaj na zakończenie zapisów SM2 w tle
+      await this._waitForSaves();
+      const duration = Math.round((new Date() - this.sessionStart) / 1000);
+      const totalReviewed = this.sessionResults.length;
+      const totalKnown = this.sessionResults.filter(r => r.known).length;
+      const totalUnknown = totalReviewed - totalKnown;
 
-      // Aktualizuj streak
-      await this.updateStreak();
-    } catch (err) {
-      console.error('Błąd zapisu sesji:', err);
+      // Zapisz session_log do bazy
+      try {
+        await supabase.from('session_log').insert({
+          user_id: Auth.currentUser.id,
+          date: new Date().toISOString().split('T')[0],
+          total_reviewed: totalReviewed,
+          total_known: totalKnown,
+          total_unknown: totalUnknown,
+          duration_seconds: duration
+        });
+
+        // Aktualizuj streak
+        await this.updateStreak();
+      } catch (err) {
+        console.error('Błąd zapisu sesji:', err);
+      }
+
+      if (showSummary) {
+        this.showSummary(totalReviewed, totalKnown, totalUnknown, duration);
+      } else {
+        App.showScreen('home');
+      }
+    } finally {
+      this._finalizing = false;
     }
-
-    // Pokaż podsumowanie
-    this.showSummary(totalReviewed, totalKnown, totalUnknown, duration);
   },
 
   /**

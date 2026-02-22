@@ -239,6 +239,7 @@ Sesja jest podzielona na etapy:
 - Wyświetlony phrasal verb (duża czcionka, wyśrodkowany)
 - Kategoria i rejestr (małe tagi, np. `business` `formal`)
 - Przycisk wymowy (ikona głośnika — Web Speech API)
+- Przycisk `x` — kończy tryb nauki i wraca bezpośrednio do ekranu głównego (bez podsumowania)
 - Dwa przyciski: "Wiem ✓" / "Nie wiem ✗"
 - Licznik etapu:
   - **Nowe: pozostało X** (w pakiecie dziennym)

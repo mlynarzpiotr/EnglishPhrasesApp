@@ -72,6 +72,11 @@
 
 ## 🐛 Bugfixy / Ulepszenia
 
+- [x] **Stabilizacja wyjścia `x` i odświeżenia Home**
+  - `x` zawsze wraca na Home
+  - przed wejściem na Home aplikacja czeka na domknięcie zapisów SM-2
+  - naprawa niestabilnego kliknięcia `x` na iPhone Safari (click + touchend + debounce)
+
 - [x] **Dynamiczny tekst przycisku start (Home)**
   - Nowe / Powtórki / Dodatkowe nowe
 

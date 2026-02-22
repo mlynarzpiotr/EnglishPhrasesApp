@@ -98,6 +98,9 @@ Na ekranie startowym przycisk nauki pokazuje aktualny etap dnia:
 Możesz też wybrać filtr poziomu (B2/C1). Dotyczy on tylko nowych fiszek —
 powtórki pozostają bez filtra, żeby nie psuć algorytmu SM-2.
 
+Po kliknięciu `x` w trakcie nauki aplikacja wraca od razu do ekranu głównego.
+Najpierw domyka zapisy sesji, a dopiero potem odświeża liczniki Home.
+
 ---
 
 ## Dlaczego to działa?

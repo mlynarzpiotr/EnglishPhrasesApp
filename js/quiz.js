@@ -24,6 +24,8 @@ const Quiz = {
   goalReached: false,
   inPhaseC: false,
   _loadingMore: false,
+  _exiting: false,
+  _finalizing: false,
   _answered: false,    // blokada podwójnego kliknięcia
 
   /**
@@ -40,12 +42,17 @@ const Quiz = {
     this.goalReached = false;
     this.inPhaseC = false;
     this._loadingMore = false;
+    this._exiting = false;
+    this._finalizing = false;
 
     const content = document.getElementById('quiz-content');
     content.innerHTML = '<div class="loading-text"><span class="spinner"></span> Ładowanie quizu...</div>';
 
     try {
       await this.loadQueue();
+
+      // Jeśli użytkownik opuścił ekran podczas ładowania, nie renderuj quizu
+      if (App.currentScreen !== 'quiz' || this._exiting) return;
 
       if (this.queue.length === 0 && this.remainingPhaseCIds.length === 0) {
         content.innerHTML = `
@@ -65,18 +72,10 @@ const Quiz = {
 
       this.showQuestion();
     } catch (err) {
+      if (App.currentScreen !== 'quiz' || this._exiting) return;
       console.error('Błąd ładowania quizu:', err);
       content.innerHTML = `<div class="alert alert-error">Błąd ładowania: ${err.message}</div>`;
     }
-
-    // Przycisk zamknięcia sesji
-    document.getElementById('quiz-close').onclick = () => {
-      if (this.sessionResults.length > 0) {
-        this.endSession();
-      } else {
-        App.showScreen('home');
-      }
-    };
   },
 
   /**
@@ -357,7 +356,7 @@ const Quiz = {
         return;
       }
 
-      this.endSession();
+      await this.endSession();
       return;
     }
 
@@ -404,6 +403,26 @@ const Quiz = {
     }
 
     this.showQuestion();
+  },
+
+  /**
+   * Natychmiastowe wyjście do Home (bez podsumowania)
+   * z pełnym domknięciem zapisów sesji.
+   */
+  async exitToHome() {
+    if (this._exiting) return;
+    this._exiting = true;
+
+    try {
+      if (this.sessionResults.length === 0) {
+        App.showScreen('home');
+        return;
+      }
+
+      await this.finishSession({ showSummary: false });
+    } finally {
+      this._exiting = false;
+    }
   },
 
   /**
@@ -510,8 +529,7 @@ const Quiz = {
   async _waitForSaves() {
     if (this._saveQueue.length === 0 && !this._saving) return;
 
-    const deadline = Date.now() + 10000;
-    while ((this._saveQueue.length > 0 || this._saving) && Date.now() < deadline) {
+    while (this._saveQueue.length > 0 || this._saving) {
       await new Promise(r => setTimeout(r, 100));
     }
   },
@@ -520,29 +538,48 @@ const Quiz = {
    * Zakończ sesję — zapisz log i pokaż podsumowanie
    */
   async endSession() {
-    await this._waitForSaves();
-    const duration = Math.round((new Date() - this.sessionStart) / 1000);
-    const totalReviewed = this.sessionResults.length;
-    const totalKnown = this.sessionResults.filter(r => r.known).length;
-    const totalUnknown = totalReviewed - totalKnown;
+    await this.finishSession({ showSummary: true });
+  },
 
-    // Zapisz session_log do bazy
+  /**
+   * Wspólna finalizacja sesji:
+   * - showSummary=true: ekran podsumowania
+   * - showSummary=false: powrót na Home
+   */
+  async finishSession({ showSummary }) {
+    if (this._finalizing) return;
+    this._finalizing = true;
     try {
-      await supabase.from('session_log').insert({
-        user_id: Auth.currentUser.id,
-        date: new Date().toISOString().split('T')[0],
-        total_reviewed: totalReviewed,
-        total_known: totalKnown,
-        total_unknown: totalUnknown,
-        duration_seconds: duration
-      });
+      await this._waitForSaves();
+      const duration = Math.round((new Date() - this.sessionStart) / 1000);
+      const totalReviewed = this.sessionResults.length;
+      const totalKnown = this.sessionResults.filter(r => r.known).length;
+      const totalUnknown = totalReviewed - totalKnown;
 
-      await this.updateStreak();
-    } catch (err) {
-      console.error('Błąd zapisu sesji (quiz):', err);
+      // Zapisz session_log do bazy
+      try {
+        await supabase.from('session_log').insert({
+          user_id: Auth.currentUser.id,
+          date: new Date().toISOString().split('T')[0],
+          total_reviewed: totalReviewed,
+          total_known: totalKnown,
+          total_unknown: totalUnknown,
+          duration_seconds: duration
+        });
+
+        await this.updateStreak();
+      } catch (err) {
+        console.error('Błąd zapisu sesji (quiz):', err);
+      }
+
+      if (showSummary) {
+        this.showSummary(totalReviewed, totalKnown, totalUnknown, duration);
+      } else {
+        App.showScreen('home');
+      }
+    } finally {
+      this._finalizing = false;
     }
-
-    this.showSummary(totalReviewed, totalKnown, totalUnknown, duration);
   },
 
   /**

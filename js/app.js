@@ -27,10 +27,25 @@ const App = {
 
     // Nawigacja kliknięcia
     this.navLinks.forEach(link => {
-      link.addEventListener('click', () => {
-        this.showScreen(link.dataset.screen);
+      link.addEventListener('click', async () => {
+        const target = link.dataset.screen;
+
+        if (target === 'home' && this.currentScreen === 'learn' && typeof Flashcards !== 'undefined') {
+          await Flashcards.exitToHome();
+          return;
+        }
+
+        if (target === 'home' && this.currentScreen === 'quiz' && typeof Quiz !== 'undefined') {
+          await Quiz.exitToHome();
+          return;
+        }
+
+        this.showScreen(target);
       });
     });
+
+    // Przyciski zamknięcia sesji (x) — podpinane od razu, przed ładowaniem sesji
+    this.bindSessionCloseButtons();
 
     // Inicjalizacja formularza auth
     this.initAuthForm();
@@ -114,6 +129,43 @@ const App = {
 
     // Zatrzymaj wymowę przy zmianie ekranu
     Speech.stop();
+  },
+
+  bindSessionCloseButtons() {
+    const flashcardClose = document.getElementById('flashcard-close');
+    const quizClose = document.getElementById('quiz-close');
+
+    this.bindTapAction(flashcardClose, async () => {
+      if (this.currentScreen === 'learn' && typeof Flashcards !== 'undefined') {
+        await Flashcards.exitToHome();
+      }
+    });
+
+    this.bindTapAction(quizClose, async () => {
+      if (this.currentScreen === 'quiz' && typeof Quiz !== 'undefined') {
+        await Quiz.exitToHome();
+      }
+    });
+  },
+
+  // click + touchend z debounce'em, żeby iOS nie wywoływał akcji podwójnie
+  bindTapAction(element, handler) {
+    if (!element) return;
+    let lastFire = 0;
+
+    const wrapped = (event) => {
+      if (event.type === 'touchend') {
+        event.preventDefault();
+      }
+
+      const now = Date.now();
+      if (now - lastFire < 350) return;
+      lastFire = now;
+      handler();
+    };
+
+    element.addEventListener('touchend', wrapped, { passive: false });
+    element.addEventListener('click', wrapped);
   },
 
   // --- Formularz Auth ---
